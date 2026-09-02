@@ -29,9 +29,7 @@ protected:
 
 	bool GetSelectionHit(FHitResult& OutHit) const;
 	void TryPlaceDefender(ADefenderPlacementPoint* PlacementPoint);
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Placement", meta = (ClampMin = "0"))
-	int32 DefenderCost;
+	int32 GetDefenderCost() const;
 
 	/** Debug: left-clicking an actor with a Health Component applies this damage. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Debug", meta = (ClampMin = "0.0"))

@@ -55,13 +55,28 @@ public:
 	int32 GetStartingResources() const { return StartingResources; }
 
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
+	int32 GetDefenderCost() const { return DefenderCost; }
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
+	int32 GetEnemyKillReward() const { return EnemyKillReward; }
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
 	bool CanAfford(int32 Cost) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
+	bool CanAffordDefender() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Resources")
 	void AddResources(int32 Amount);
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Resources")
 	bool SpendResources(int32 Amount);
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Resources")
+	bool TrySpendDefenderCost();
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Resources")
+	void HandleEnemyKilled(int32 RewardOverride = -1);
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Tower")
 	void SetTowerHealth(float NewCurrentHealth, float NewMaxHealth);
@@ -75,6 +90,12 @@ public:
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
 	int32 StartingResources;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
+	int32 DefenderCost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
+	int32 EnemyKillReward;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources")
 	int32 CurrentResources;

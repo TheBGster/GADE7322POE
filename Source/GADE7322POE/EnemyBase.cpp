@@ -25,9 +25,11 @@ AEnemyBase::AEnemyBase()
 	AttackDamage = 8.0f;
 	AttackRange = 180.0f;
 	AttackCooldown = 1.0f;
+	ResourceReward = 10;
 	CurrentWaypointIndex = 0;
 	BehaviorState = EEnemyBehaviorState::Moving;
 	bHasReachedDestination = false;
+	bHasGrantedKillReward = false;
 
 	Tags.Add(TowerDefenseTags::Enemy);
 
@@ -248,6 +250,7 @@ void AEnemyBase::AttackTarget()
 void AEnemyBase::Die(AActor* DeadActor)
 {
 	UE_LOG(LogTowerDefense, Log, TEXT("Enemy '%s' died on path %d."), *GetName(), AssignedPath.PathID);
+	GrantKillReward();
 	StopBehavior();
 	Destroy();
 }
@@ -337,4 +340,22 @@ void AEnemyBase::StartAttackTimer()
 	{
 		World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, AttackCooldown, true);
 	}
+}
+
+void AEnemyBase::GrantKillReward()
+{
+	if (bHasGrantedKillReward)
+	{
+		return;
+	}
+
+	bHasGrantedKillReward = true;
+
+	ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
+	if (!GameState)
+	{
+		return;
+	}
+
+	GameState->HandleEnemyKilled(ResourceReward);
 }

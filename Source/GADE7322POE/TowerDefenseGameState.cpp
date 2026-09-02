@@ -6,6 +6,8 @@
 ATowerDefenseGameState::ATowerDefenseGameState()
 {
 	StartingResources = 100;
+	DefenderCost = 25;
+	EnemyKillReward = 10;
 	CurrentResources = StartingResources;
 	TowerMaxHealth = 0.0f;
 	TowerCurrentHealth = 0.0f;
@@ -45,6 +47,11 @@ bool ATowerDefenseGameState::CanAfford(int32 Cost) const
 	return Cost >= 0 && CurrentResources >= Cost;
 }
 
+bool ATowerDefenseGameState::CanAffordDefender() const
+{
+	return CanAfford(DefenderCost);
+}
+
 void ATowerDefenseGameState::AddResources(int32 Amount)
 {
 	if (Amount <= 0)
@@ -55,7 +62,7 @@ void ATowerDefenseGameState::AddResources(int32 Amount)
 	CurrentResources += Amount;
 	OnResourcesChanged.Broadcast(CurrentResources);
 
-	UE_LOG(LogTowerDefense, Verbose, TEXT("Added %d resources. Total: %d"), Amount, CurrentResources);
+	UE_LOG(LogTowerDefense, Log, TEXT("Added %d resources. Total: %d"), Amount, CurrentResources);
 }
 
 bool ATowerDefenseGameState::SpendResources(int32 Amount)
@@ -69,8 +76,30 @@ bool ATowerDefenseGameState::SpendResources(int32 Amount)
 	CurrentResources -= Amount;
 	OnResourcesChanged.Broadcast(CurrentResources);
 
-	UE_LOG(LogTowerDefense, Verbose, TEXT("Spent %d resources. Remaining: %d"), Amount, CurrentResources);
+	UE_LOG(LogTowerDefense, Log, TEXT("Spent %d resources. Remaining: %d"), Amount, CurrentResources);
 	return true;
+}
+
+bool ATowerDefenseGameState::TrySpendDefenderCost()
+{
+	return SpendResources(DefenderCost);
+}
+
+void ATowerDefenseGameState::HandleEnemyKilled(int32 RewardOverride)
+{
+	if (MatchState != ETowerDefenseMatchState::InProgress)
+	{
+		return;
+	}
+
+	const int32 Reward = RewardOverride >= 0 ? RewardOverride : EnemyKillReward;
+	if (Reward <= 0)
+	{
+		return;
+	}
+
+	AddResources(Reward);
+	UE_LOG(LogTowerDefense, Log, TEXT("Enemy kill reward applied. +%d"), Reward);
 }
 
 void ATowerDefenseGameState::SetTowerHealth(float NewCurrentHealth, float NewMaxHealth)

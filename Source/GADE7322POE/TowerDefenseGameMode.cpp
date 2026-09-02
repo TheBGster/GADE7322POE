@@ -2,6 +2,7 @@
 
 #include "TowerDefenseGameMode.h"
 #include "TowerDefenseGameState.h"
+#include "TowerDefenseHUD.h"
 #include "TowerDefensePlayerController.h"
 #include "ProceduralTerrainGenerator.h"
 #include "CentralTower.h"
@@ -18,6 +19,7 @@ ATowerDefenseGameMode::ATowerDefenseGameMode()
 {
 	GameStateClass = ATowerDefenseGameState::StaticClass();
 	PlayerControllerClass = ATowerDefensePlayerController::StaticClass();
+	HUDClass = ATowerDefenseHUD::StaticClass();
 	DefaultPawnClass = ADefaultPawn::StaticClass();
 	TerrainOrigin = FVector(0.0f, 0.0f, 50.0f);
 	bMovePlayerAboveTerrain = true;

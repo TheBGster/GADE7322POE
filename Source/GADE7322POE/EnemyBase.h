@@ -71,6 +71,7 @@ protected:
 	AActor* GetCentralTowerActor() const;
 	FVector GetWaypointWorldLocation(int32 WaypointIndex) const;
 	void StartAttackTimer();
+	void GrantKillReward();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -102,6 +103,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Combat", meta = (ClampMin = "0.1"))
 	float AttackCooldown;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Rewards", meta = (ClampMin = "0"))
+	int32 ResourceReward;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	int32 CurrentWaypointIndex;
 
@@ -117,4 +121,5 @@ protected:
 	FTimerHandle AttackTimerHandle;
 	TArray<TWeakObjectPtr<AActor>> TargetsInRange;
 	bool bHasReachedDestination;
+	bool bHasGrantedKillReward;
 };

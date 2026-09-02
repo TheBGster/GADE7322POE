@@ -14,7 +14,6 @@ ATowerDefensePlayerController::ATowerDefensePlayerController()
 	bEnableClickEvents = true;
 	bEnableMouseOverEvents = true;
 	DefaultMouseCursor = EMouseCursor::Default;
-	DefenderCost = 25;
 	DebugDamageAmount = 25.0f;
 	bApplyDebugDamageOnSelect = false;
 }
@@ -28,7 +27,7 @@ void ATowerDefensePlayerController::BeginPlay()
 	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
 
-	UE_LOG(LogTowerDefense, Log, TEXT("Tower Defense player controller ready. Click a yellow pad to place a defender (cost %d)."), DefenderCost);
+	UE_LOG(LogTowerDefense, Log, TEXT("Tower Defense player controller ready. Click a pad to place a defender (cost %d)."), GetDefenderCost());
 }
 
 void ATowerDefensePlayerController::SetupInputComponent()
@@ -94,19 +93,28 @@ void ATowerDefensePlayerController::TryPlaceDefender(ADefenderPlacementPoint* Pl
 		return;
 	}
 
-	if (!GameState->CanAfford(DefenderCost))
+	const int32 Cost = GameState->GetDefenderCost();
+	if (!GameState->CanAffordDefender())
 	{
 		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot afford a defender. Cost: %d  Current resources: %d"),
-			DefenderCost, GameState->GetCurrentResources());
+			Cost, GameState->GetCurrentResources());
 		return;
 	}
 
 	if (PlacementPoint->PlaceDefender())
 	{
-		GameState->SpendResources(DefenderCost);
-		UE_LOG(LogTowerDefense, Log, TEXT("Spent %d resources. Remaining: %d"),
-			DefenderCost, GameState->GetCurrentResources());
+		GameState->TrySpendDefenderCost();
 	}
+}
+
+int32 ATowerDefensePlayerController::GetDefenderCost() const
+{
+	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	{
+		return GameState->GetDefenderCost();
+	}
+
+	return 25;
 }
 
 bool ATowerDefensePlayerController::GetSelectionHit(FHitResult& OutHit) const
