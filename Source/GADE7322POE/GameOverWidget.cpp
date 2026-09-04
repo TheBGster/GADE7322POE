@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "GameOverWidget.h"
+#include "GADE7322POE.h"
 #include "TowerDefenseGameMode.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -113,8 +114,11 @@ void UGameOverWidget::HandleRestartClicked()
 void UGameOverWidget::RestartGame()
 {
 	ATowerDefenseGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ATowerDefenseGameMode>() : nullptr;
-	if (GameMode)
+	if (!GameMode)
 	{
-		GameMode->RestartCurrentGame();
+		UE_LOG(LogTowerDefense, Error, TEXT("Game Over Restart failed: TowerDefenseGameMode was not found."));
+		return;
 	}
+
+	GameMode->RestartCurrentGame();
 }

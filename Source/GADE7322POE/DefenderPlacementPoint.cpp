@@ -40,7 +40,7 @@ void ADefenderPlacementPoint::InitializePlacement(const FVector& InLocation)
 
 bool ADefenderPlacementPoint::CanPlaceDefender() const
 {
-	return !bIsOccupied && DefenderClass;
+	return DefenderClass && !OccupyingDefender.IsValid();
 }
 
 bool ADefenderPlacementPoint::PlaceDefender()
@@ -67,7 +67,7 @@ bool ADefenderPlacementPoint::PlaceDefender()
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	ADefenderBase* Defender = World->SpawnActor<ADefenderBase>(ClassToSpawn, PlacementLocation, FRotator::ZeroRotator, SpawnParams);
-	if (!Defender)
+	if (!IsValid(Defender))
 	{
 		UE_LOG(LogTowerDefense, Error, TEXT("Failed to spawn a defender at %s."), *PlacementLocation.ToCompactString());
 		return false;

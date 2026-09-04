@@ -39,7 +39,8 @@ protected:
 	void SpawnEnemy();
 
 	int32 CountActiveEnemies() const;
-	const FGeneratedPath* SelectNextPath() const;
+	const FGeneratedPath* SelectNextPath();
+	bool CanSpawnNow() const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spawner")
 	TSubclassOf<AEnemyBase> EnemyClass;

@@ -20,7 +20,7 @@ void UHealthComponent::BeginPlay()
 	AActor* Owner = GetOwner();
 	if (Owner)
 	{
-		Owner->OnTakeAnyDamage.AddDynamic(this, &UHealthComponent::HandleTakeAnyDamage);
+		Owner->OnTakeAnyDamage.AddUniqueDynamic(this, &UHealthComponent::HandleTakeAnyDamage);
 	}
 
 	InitializeHealth();
@@ -61,7 +61,7 @@ float UHealthComponent::TakeDamage(float DamageAmount, AActor* DamageCauser, ACo
 	}
 
 	AActor* Owner = GetOwner();
-	if (Owner && !Owner->CanBeDamaged())
+	if (!IsValid(Owner) || !Owner->CanBeDamaged())
 	{
 		return 0.0f;
 	}
@@ -111,6 +111,11 @@ float UHealthComponent::GetHealthPercent() const
 
 void UHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser)
 {
+	if (!IsValid(DamagedActor) || DamagedActor != GetOwner())
+	{
+		return;
+	}
+
 	TakeDamage(Damage, DamageCauser, InstigatedBy);
 }
 

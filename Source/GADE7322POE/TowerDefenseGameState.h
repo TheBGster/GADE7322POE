@@ -48,6 +48,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tower Defense")
 	ETowerDefenseMatchState GetMatchState() const { return MatchState; }
 
+	UFUNCTION(BlueprintPure, Category = "Tower Defense")
+	bool IsMatchInProgress() const { return MatchState == ETowerDefenseMatchState::InProgress; }
+
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
 	int32 GetCurrentResources() const { return CurrentResources; }
 

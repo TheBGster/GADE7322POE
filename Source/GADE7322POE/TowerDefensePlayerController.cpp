@@ -81,7 +81,7 @@ void ATowerDefensePlayerController::TryPlaceDefender(ADefenderPlacementPoint* Pl
 	}
 
 	ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
-	if (!GameState || GameState->GetMatchState() != ETowerDefenseMatchState::InProgress)
+	if (!GameState || !GameState->IsMatchInProgress())
 	{
 		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot place a defender: the match is not in progress."));
 		return;
@@ -94,16 +94,16 @@ void ATowerDefensePlayerController::TryPlaceDefender(ADefenderPlacementPoint* Pl
 	}
 
 	const int32 Cost = GameState->GetDefenderCost();
-	if (!GameState->CanAffordDefender())
+	if (!GameState->TrySpendDefenderCost())
 	{
 		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot afford a defender. Cost: %d  Current resources: %d"),
 			Cost, GameState->GetCurrentResources());
 		return;
 	}
 
-	if (PlacementPoint->PlaceDefender())
+	if (!PlacementPoint->PlaceDefender())
 	{
-		GameState->TrySpendDefenderCost();
+		GameState->AddResources(Cost);
 	}
 }
 

@@ -67,14 +67,14 @@ void ADefenderBase::BeginPlay()
 	if (AttackRangeSphere)
 	{
 		AttackRangeSphere->SetSphereRadius(AttackRange);
-		AttackRangeSphere->OnComponentBeginOverlap.AddDynamic(this, &ThisClass::HandleAttackRangeOverlap);
-		AttackRangeSphere->OnComponentEndOverlap.AddDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
+		AttackRangeSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ThisClass::HandleAttackRangeOverlap);
+		AttackRangeSphere->OnComponentEndOverlap.AddUniqueDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
 	}
 
 	if (HealthComponent)
 	{
 		HealthComponent->InitializeHealth(MaxHealth);
-		HealthComponent->OnDeath.AddDynamic(this, &ThisClass::Die);
+		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
 	}
 
 	StartAttackTimer();
@@ -84,6 +84,24 @@ void ADefenderBase::BeginPlay()
 void ADefenderBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopCombat();
+
+	if (AttackRangeSphere)
+	{
+		AttackRangeSphere->OnComponentBeginOverlap.RemoveDynamic(this, &ThisClass::HandleAttackRangeOverlap);
+		AttackRangeSphere->OnComponentEndOverlap.RemoveDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnDeath.RemoveDynamic(this, &ThisClass::Die);
+	}
+
+	if (ADefenderPlacementPoint* PlacementPoint = OwningPlacementPoint.Get())
+	{
+		PlacementPoint->NotifyDefenderDestroyed();
+		OwningPlacementPoint = nullptr;
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -94,6 +112,12 @@ void ADefenderBase::SetOwningPlacementPoint(ADefenderPlacementPoint* PlacementPo
 
 void ADefenderBase::FindTarget()
 {
+	if (!IsCombatAllowed())
+	{
+		CurrentTarget = nullptr;
+		return;
+	}
+
 	CurrentTarget = nullptr;
 
 	float ClosestDistanceSq = TNumericLimits<float>::Max();
@@ -117,12 +141,9 @@ void ADefenderBase::FindTarget()
 
 void ADefenderBase::AttackTarget()
 {
-	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	if (!IsCombatAllowed())
 	{
-		if (GameState->GetMatchState() != ETowerDefenseMatchState::InProgress)
-		{
-			return;
-		}
+		return;
 	}
 
 	if (!IsValidTarget(CurrentTarget.Get()))
@@ -148,6 +169,7 @@ void ADefenderBase::Die(AActor* DeadActor)
 
 	if (ADefenderPlacementPoint* PlacementPoint = OwningPlacementPoint.Get())
 	{
+		OwningPlacementPoint = nullptr;
 		PlacementPoint->NotifyDefenderDestroyed();
 	}
 
@@ -209,10 +231,27 @@ bool ADefenderBase::IsValidTarget(AActor* Actor) const
 	return TargetHealth && !TargetHealth->IsDead();
 }
 
+bool ADefenderBase::IsCombatAllowed() const
+{
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	const ATowerDefenseGameState* GameState = World ? World->GetGameState<ATowerDefenseGameState>() : nullptr;
+	return GameState && GameState->IsMatchInProgress();
+}
+
 void ADefenderBase::StartAttackTimer()
 {
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, AttackCooldown, true);
+		return;
 	}
+
+	World->GetTimerManager().ClearTimer(AttackTimerHandle);
+	const float Interval = FMath::Max(AttackCooldown, 0.1f);
+	World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, Interval, true);
 }

@@ -74,14 +74,14 @@ void AEnemyBase::BeginPlay()
 	if (AttackRangeSphere)
 	{
 		AttackRangeSphere->SetSphereRadius(AttackRange);
-		AttackRangeSphere->OnComponentBeginOverlap.AddDynamic(this, &ThisClass::HandleAttackRangeOverlap);
-		AttackRangeSphere->OnComponentEndOverlap.AddDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
+		AttackRangeSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ThisClass::HandleAttackRangeOverlap);
+		AttackRangeSphere->OnComponentEndOverlap.AddUniqueDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
 	}
 
 	if (HealthComponent)
 	{
 		HealthComponent->InitializeHealth(MaxHealth);
-		HealthComponent->OnDeath.AddDynamic(this, &ThisClass::Die);
+		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
 	}
 
 	StartAttackTimer();
@@ -90,6 +90,18 @@ void AEnemyBase::BeginPlay()
 void AEnemyBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopBehavior();
+
+	if (AttackRangeSphere)
+	{
+		AttackRangeSphere->OnComponentBeginOverlap.RemoveDynamic(this, &ThisClass::HandleAttackRangeOverlap);
+		AttackRangeSphere->OnComponentEndOverlap.RemoveDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnDeath.RemoveDynamic(this, &ThisClass::Die);
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -97,10 +109,12 @@ void AEnemyBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (BehaviorState == EEnemyBehaviorState::Moving)
+	if (!IsCombatAllowed() || BehaviorState != EEnemyBehaviorState::Moving)
 	{
-		MoveAlongPath(DeltaTime);
+		return;
 	}
+
+	MoveAlongPath(DeltaTime);
 }
 
 void AEnemyBase::SetPath(const FGeneratedPath& Path)
@@ -108,13 +122,19 @@ void AEnemyBase::SetPath(const FGeneratedPath& Path)
 	AssignedPath = Path;
 	CurrentWaypointIndex = 0;
 	bHasReachedDestination = false;
-	BehaviorState = EEnemyBehaviorState::Moving;
 	TargetActor = nullptr;
 
-	if (AssignedPath.Waypoints.Num() > 0)
+	if (AssignedPath.Waypoints.Num() == 0)
 	{
-		SetActorLocation(GetWaypointWorldLocation(0));
+		UE_LOG(LogTowerDefense, Warning, TEXT("Enemy '%s' received an empty path and will be removed."), *GetName());
+		StopBehavior();
+		Destroy();
+		return;
 	}
+
+	BehaviorState = EEnemyBehaviorState::Moving;
+	SetActorTickEnabled(true);
+	SetActorLocation(GetWaypointWorldLocation(0));
 
 	UE_LOG(LogTowerDefense, Log, TEXT("Enemy '%s' assigned path %d with %d waypoints."),
 		*GetName(), AssignedPath.PathID, AssignedPath.Waypoints.Num());
@@ -178,7 +198,7 @@ void AEnemyBase::AdvanceToNextWaypoint()
 
 void AEnemyBase::FindTarget()
 {
-	if (IsDead())
+	if (!IsCombatAllowed())
 	{
 		return;
 	}
@@ -223,12 +243,9 @@ void AEnemyBase::FindTarget()
 
 void AEnemyBase::AttackTarget()
 {
-	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	if (!IsCombatAllowed())
 	{
-		if (GameState->GetMatchState() != ETowerDefenseMatchState::InProgress)
-		{
-			return;
-		}
+		return;
 	}
 
 	if (!IsValidAttackTarget(TargetActor.Get()))
@@ -306,6 +323,18 @@ bool AEnemyBase::IsValidAttackTarget(AActor* Actor) const
 	return TargetHealth && !TargetHealth->IsDead();
 }
 
+bool AEnemyBase::IsCombatAllowed() const
+{
+	if (IsDead())
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	const ATowerDefenseGameState* GameState = World ? World->GetGameState<ATowerDefenseGameState>() : nullptr;
+	return GameState && GameState->IsMatchInProgress();
+}
+
 AActor* AEnemyBase::GetCentralTowerActor() const
 {
 	const UWorld* World = GetWorld();
@@ -336,10 +365,15 @@ FVector AEnemyBase::GetWaypointWorldLocation(int32 WaypointIndex) const
 
 void AEnemyBase::StartAttackTimer()
 {
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, AttackCooldown, true);
+		return;
 	}
+
+	World->GetTimerManager().ClearTimer(AttackTimerHandle);
+	const float Interval = FMath::Max(AttackCooldown, 0.1f);
+	World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, Interval, true);
 }
 
 void AEnemyBase::GrantKillReward()

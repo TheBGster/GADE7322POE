@@ -5,6 +5,8 @@
 #include "Algo/Reverse.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Math/NumericLimits.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -43,6 +45,8 @@ AProceduralTerrainGenerator::AProceduralTerrainGenerator()
 	MaxDefenderPlacementPoints = 16;
 	PlacementMinSpacing = 2;
 	NoiseOrigin = FVector2D::ZeroVector;
+	GroundColor = FLinearColor(0.10f, 0.50f, 0.10f, 1.0f);
+	PathColor = FLinearColor(0.35f, 0.15f, 0.05f, 1.0f);
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SceneRoot->SetMobility(EComponentMobility::Movable);
@@ -76,6 +80,12 @@ AProceduralTerrainGenerator::AProceduralTerrainGenerator()
 		GroundTileMesh = CubeMesh.Object;
 		ElevatedTileMesh = CubeMesh.Object;
 		PathTileMesh = CubeMesh.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ShapeMaterial(TEXT("/Engine/BasicShapes/BasicShapeMaterial"));
+	if (ShapeMaterial.Succeeded())
+	{
+		BaseTileMaterial = ShapeMaterial.Object;
 	}
 }
 
@@ -176,6 +186,14 @@ void AProceduralTerrainGenerator::GeneratePaths()
 
 		if (GridPoints.Num() < 2)
 		{
+			for (int32 Retry = 0; Retry < 8 && GridPoints.Num() < 2; ++Retry)
+			{
+				FindPathGreedy(PickCellOnEdge(Retry % 4), Goal, GridPoints);
+			}
+		}
+
+		if (GridPoints.Num() < 2)
+		{
 			UE_LOG(LogTowerDefense, Error, TEXT("Path %d is invalid and was skipped."), PathIndex);
 			continue;
 		}
@@ -185,6 +203,11 @@ void AProceduralTerrainGenerator::GeneratePaths()
 
 		UE_LOG(LogTowerDefense, Log, TEXT("Path %d: start (%d, %d) -> tower (%d, %d) with %d waypoints."),
 			PathIndex, StartCells[PathIndex].X, StartCells[PathIndex].Y, Goal.X, Goal.Y, GridPoints.Num());
+	}
+
+	if (GeneratedPaths.Num() < NumberOfPaths)
+	{
+		UE_LOG(LogTowerDefense, Error, TEXT("Generated %d paths but %d were requested."), GeneratedPaths.Num(), NumberOfPaths);
 	}
 }
 
@@ -245,6 +268,7 @@ void AProceduralTerrainGenerator::BuildTileInstances()
 	ConfigureInstancer(GroundTileInstancer, GroundTileMesh.Get());
 	ConfigureInstancer(ElevatedTileInstancer, ElevatedTileMesh ? ElevatedTileMesh.Get() : GroundTileMesh.Get());
 	ConfigureInstancer(PathTileInstancer, PathTileMesh ? PathTileMesh.Get() : GroundTileMesh.Get());
+	ApplyTileMaterials();
 
 	if (!GroundTileInstancer || !GroundTileInstancer->GetStaticMesh())
 	{
@@ -334,6 +358,55 @@ void AProceduralTerrainGenerator::ConfigureInstancer(UHierarchicalInstancedStati
 	{
 		Instancer->SetStaticMesh(Mesh);
 	}
+}
+
+void AProceduralTerrainGenerator::ApplyTileMaterials()
+{
+	SetInstancerColor(GroundTileInstancer, GroundMaterialInstance, GroundColor);
+	SetInstancerColor(ElevatedTileInstancer, GroundMaterialInstance, GroundColor);
+	SetInstancerColor(PathTileInstancer, PathMaterialInstance, PathColor);
+}
+
+UMaterialInterface* AProceduralTerrainGenerator::GetSourceTileMaterial() const
+{
+	if (BaseTileMaterial)
+	{
+		return BaseTileMaterial.Get();
+	}
+
+	return LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+}
+
+void AProceduralTerrainGenerator::SetInstancerColor(UHierarchicalInstancedStaticMeshComponent* Instancer, TObjectPtr<UMaterialInstanceDynamic>& MaterialInstance, const FLinearColor& Color)
+{
+	if (!Instancer)
+	{
+		return;
+	}
+
+	UMaterialInterface* SourceMaterial = GetSourceTileMaterial();
+	if (!SourceMaterial)
+	{
+		UE_LOG(LogTowerDefense, Warning, TEXT("Could not load a base material for terrain tiles."));
+		return;
+	}
+
+	if (!MaterialInstance || MaterialInstance->Parent != SourceMaterial)
+	{
+		MaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
+	}
+
+	if (!MaterialInstance)
+	{
+		return;
+	}
+
+	MaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);
+	MaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), Color);
+	Instancer->SetMaterial(0, MaterialInstance);
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Applied terrain colour %s to '%s'."),
+		*Color.ToString(), *Instancer->GetName());
 }
 
 void AProceduralTerrainGenerator::InitializeRandomStream()

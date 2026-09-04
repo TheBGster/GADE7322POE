@@ -7,6 +7,8 @@
 #include "CentralTower.generated.h"
 
 class UHealthComponent;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class USphereComponent;
 class UStaticMeshComponent;
 class USceneComponent;
@@ -56,8 +58,10 @@ protected:
 
 	bool IsValidTarget(AActor* Actor) const;
 	bool IsTargetInRange(AActor* Actor) const;
+	bool IsCombatAllowed() const;
 	void StartAttackTimer();
 	void SyncHealthToGameState() const;
+	void ApplyTowerMaterial();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -85,6 +89,16 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Combat")
 	bool bDrawAttackRange;
+
+	/** Optional parent material. If empty, Engine BasicShapeMaterial is used. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Materials")
+	TObjectPtr<UMaterialInterface> BaseTowerMaterial;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Materials")
+	FLinearColor TowerColor;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Tower|Materials")
+	TObjectPtr<UMaterialInstanceDynamic> TowerMaterialInstance;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower|Combat")
 	TWeakObjectPtr<AActor> CurrentTarget;

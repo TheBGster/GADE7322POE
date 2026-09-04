@@ -8,6 +8,8 @@
 #include "ProceduralTerrainGenerator.generated.h"
 
 class UHierarchicalInstancedStaticMeshComponent;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class USceneComponent;
 
 /**
@@ -75,9 +77,12 @@ protected:
 	void GenerateEnemySpawnLocations();
 	void GenerateDefenderPlacementLocations();
 	void BuildTileInstances();
+	void ApplyTileMaterials();
 	void DrawPathDebug() const;
 
 	void ConfigureInstancer(UHierarchicalInstancedStaticMeshComponent* Instancer, UStaticMesh* Mesh) const;
+	UMaterialInterface* GetSourceTileMaterial() const;
+	void SetInstancerColor(UHierarchicalInstancedStaticMeshComponent* Instancer, TObjectPtr<UMaterialInstanceDynamic>& MaterialInstance, const FLinearColor& Color);
 	int32 ChooseHeightLevel(int32 X, int32 Y) const;
 	ETerrainTileType ChooseTileType(int32 HeightLevel) const;
 	bool IsInsideCenterRadius(int32 X, int32 Y) const;
@@ -171,6 +176,22 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Mesh")
 	TObjectPtr<UStaticMesh> PathTileMesh;
+
+	/** Optional parent material. If empty, Engine BasicShapeMaterial is used. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
+	TObjectPtr<UMaterialInterface> BaseTileMaterial;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
+	FLinearColor GroundColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
+	FLinearColor PathColor;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Terrain|Materials")
+	TObjectPtr<UMaterialInstanceDynamic> GroundMaterialInstance;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Terrain|Materials")
+	TObjectPtr<UMaterialInstanceDynamic> PathMaterialInstance;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Terrain")
 	TArray<FTerrainTile> TerrainTiles;

@@ -12,6 +12,8 @@
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/NumericLimits.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -24,6 +26,7 @@ ACentralTower::ACentralTower()
 	AttackDamage = 25.0f;
 	AttackCooldown = 1.0f;
 	bDrawAttackRange = true;
+	TowerColor = FLinearColor(0.35f, 0.35f, 0.35f, 1.0f);
 
 	Tags.Add(TowerDefenseTags::Tower);
 
@@ -40,6 +43,12 @@ ACentralTower::ACentralTower()
 	if (CylinderMesh.Succeeded())
 	{
 		MeshComponent->SetStaticMesh(CylinderMesh.Object);
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ShapeMaterial(TEXT("/Engine/BasicShapes/BasicShapeMaterial"));
+	if (ShapeMaterial.Succeeded())
+	{
+		BaseTowerMaterial = ShapeMaterial.Object;
 	}
 
 	const FVector MeshScale(1.6f, 1.6f, 2.8f);
@@ -68,18 +77,19 @@ void ACentralTower::BeginPlay()
 	if (AttackRangeSphere)
 	{
 		AttackRangeSphere->SetSphereRadius(AttackRange);
-		AttackRangeSphere->OnComponentBeginOverlap.AddDynamic(this, &ThisClass::HandleAttackRangeOverlap);
-		AttackRangeSphere->OnComponentEndOverlap.AddDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
+		AttackRangeSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ThisClass::HandleAttackRangeOverlap);
+		AttackRangeSphere->OnComponentEndOverlap.AddUniqueDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
 	}
 
 	if (HealthComponent)
 	{
 		HealthComponent->InitializeHealth(MaxHealth);
-		HealthComponent->OnDeath.AddDynamic(this, &ThisClass::Die);
-		HealthComponent->OnHealthChanged.AddDynamic(this, &ThisClass::HandleHealthChanged);
+		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
+		HealthComponent->OnHealthChanged.AddUniqueDynamic(this, &ThisClass::HandleHealthChanged);
 		SyncHealthToGameState();
 	}
 
+	ApplyTowerMaterial();
 	StartAttackTimer();
 
 	if (bDrawAttackRange)
@@ -94,11 +104,30 @@ void ACentralTower::BeginPlay()
 void ACentralTower::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopCombat();
+
+	if (AttackRangeSphere)
+	{
+		AttackRangeSphere->OnComponentBeginOverlap.RemoveDynamic(this, &ThisClass::HandleAttackRangeOverlap);
+		AttackRangeSphere->OnComponentEndOverlap.RemoveDynamic(this, &ThisClass::HandleAttackRangeEndOverlap);
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnDeath.RemoveDynamic(this, &ThisClass::Die);
+		HealthComponent->OnHealthChanged.RemoveDynamic(this, &ThisClass::HandleHealthChanged);
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
 void ACentralTower::FindTarget()
 {
+	if (!IsCombatAllowed())
+	{
+		CurrentTarget = nullptr;
+		return;
+	}
+
 	CurrentTarget = nullptr;
 
 	float ClosestDistanceSq = TNumericLimits<float>::Max();
@@ -127,12 +156,9 @@ void ACentralTower::FindTarget()
 
 void ACentralTower::AttackTarget()
 {
-	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	if (!IsCombatAllowed())
 	{
-		if (GameState->GetMatchState() != ETowerDefenseMatchState::InProgress)
-		{
-			return;
-		}
+		return;
 	}
 
 	if (!IsValidTarget(CurrentTarget.Get()) || !IsTargetInRange(CurrentTarget.Get()))
@@ -235,12 +261,29 @@ bool ACentralTower::IsTargetInRange(AActor* Actor) const
 	return FVector::DistSquared(GetActorLocation(), Actor->GetActorLocation()) <= FMath::Square(AttackRange);
 }
 
+bool ACentralTower::IsCombatAllowed() const
+{
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	const ATowerDefenseGameState* GameState = World ? World->GetGameState<ATowerDefenseGameState>() : nullptr;
+	return GameState && GameState->IsMatchInProgress();
+}
+
 void ACentralTower::StartAttackTimer()
 {
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, AttackCooldown, true);
+		return;
 	}
+
+	World->GetTimerManager().ClearTimer(AttackTimerHandle);
+	const float Interval = FMath::Max(AttackCooldown, 0.1f);
+	World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, Interval, true);
 }
 
 void ACentralTower::SyncHealthToGameState() const
@@ -254,4 +297,40 @@ void ACentralTower::SyncHealthToGameState() const
 	{
 		GameState->SetTowerHealth(HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth());
 	}
+}
+
+void ACentralTower::ApplyTowerMaterial()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	UMaterialInterface* SourceMaterial = BaseTowerMaterial.Get();
+	if (!SourceMaterial)
+	{
+		SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	}
+
+	if (!SourceMaterial)
+	{
+		UE_LOG(LogTowerDefense, Warning, TEXT("Could not load a base material for the central tower."));
+		return;
+	}
+
+	if (!TowerMaterialInstance || TowerMaterialInstance->Parent != SourceMaterial)
+	{
+		TowerMaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
+	}
+
+	if (!TowerMaterialInstance)
+	{
+		return;
+	}
+
+	TowerMaterialInstance->SetVectorParameterValue(TEXT("Color"), TowerColor);
+	TowerMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), TowerColor);
+	MeshComponent->SetMaterial(0, TowerMaterialInstance);
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Applied grey tower material %s."), *TowerColor.ToString());
 }

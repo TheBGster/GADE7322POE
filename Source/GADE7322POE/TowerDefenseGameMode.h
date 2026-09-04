@@ -14,7 +14,7 @@ class ADefenderPlacementPoint;
 
 /**
  * Owns the tower defence match flow: start, game over, and restart.
- * Terrain generation, spawning, and combat will be driven from here in later stages.
+ * Spawns terrain, the central tower, placement pads, and the enemy spawner each match.
  */
 UCLASS()
 class GADE7322POE_API ATowerDefenseGameMode : public AGameModeBase
@@ -25,6 +25,7 @@ public:
 	ATowerDefenseGameMode();
 
 	virtual void StartPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense")
 	void StartNewGame();

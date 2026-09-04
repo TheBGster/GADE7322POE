@@ -32,6 +32,24 @@ void ATowerDefenseGameMode::StartPlay()
 	StartNewGame();
 }
 
+void ATowerDefenseGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (IsValid(EnemySpawner))
+	{
+		EnemySpawner->StopSpawning();
+	}
+
+	StopActiveEnemies();
+	StopActiveDefenders();
+
+	if (IsValid(CentralTower))
+	{
+		CentralTower->StopCombat();
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void ATowerDefenseGameMode::StartNewGame()
 {
 	ATowerDefenseGameState* TDGameState = GetTowerDefenseGameState();
@@ -41,6 +59,7 @@ void ATowerDefenseGameMode::StartNewGame()
 		return;
 	}
 
+	DestroyGameplayActors();
 	TDGameState->ResetForNewGame();
 	TDGameState->SetMatchState(ETowerDefenseMatchState::InProgress);
 
@@ -51,7 +70,8 @@ void ATowerDefenseGameMode::StartNewGame()
 	SpawnEnemySpawner();
 	MovePlayerToTerrainOverview();
 
-	UE_LOG(LogTowerDefense, Log, TEXT("New Tower Defense game started."));
+	const int32 PathCount = IsValid(TerrainGenerator) ? TerrainGenerator->GetGeneratedPaths().Num() : 0;
+	UE_LOG(LogTowerDefense, Log, TEXT("New Tower Defense game started. Generated paths: %d"), PathCount);
 }
 
 void ATowerDefenseGameMode::HandleTowerDestroyed()
@@ -100,6 +120,13 @@ void ATowerDefenseGameMode::RestartCurrentGame()
 	}
 
 	const FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(World, true);
+	if (CurrentLevelName.IsEmpty())
+	{
+		UE_LOG(LogTowerDefense, Error, TEXT("Restart failed: current level name is empty. Regenerating in place instead."));
+		StartNewGame();
+		return;
+	}
+
 	UE_LOG(LogTowerDefense, Log, TEXT("Restarting level '%s'."), *CurrentLevelName);
 	UGameplayStatics::OpenLevel(World, FName(*CurrentLevelName));
 }
@@ -111,13 +138,8 @@ void ATowerDefenseGameMode::TDRestart()
 
 void ATowerDefenseGameMode::TDRegen()
 {
-	DestroyGameplayActors();
-	GenerateWorldTerrain();
-	SpawnCentralTower();
-	SpawnPlacementPoints();
-	SpawnAttackTestTargets();
-	SpawnEnemySpawner();
-	MovePlayerToTerrainOverview();
+	UE_LOG(LogTowerDefense, Log, TEXT("TDRegen: starting a new match with new terrain."));
+	StartNewGame();
 }
 
 void ATowerDefenseGameMode::GenerateWorldTerrain()
@@ -226,6 +248,12 @@ void ATowerDefenseGameMode::SpawnEnemySpawner()
 	}
 
 	EnemySpawner->SetGeneratedPaths(TerrainGenerator->GetGeneratedPaths());
+	if (TerrainGenerator->GetGeneratedPaths().Num() == 0)
+	{
+		UE_LOG(LogTowerDefense, Error, TEXT("Enemy spawner was created but no paths exist. Spawning will not start."));
+		return;
+	}
+
 	EnemySpawner->StartSpawning();
 }
 
@@ -354,10 +382,31 @@ void ATowerDefenseGameMode::DestroyGameplayActors()
 		EnemySpawner = nullptr;
 	}
 
+	TArray<AActor*> RemainingSpawners;
+	UGameplayStatics::GetAllActorsOfClass(this, AEnemySpawner::StaticClass(), RemainingSpawners);
+	for (AActor* Spawner : RemainingSpawners)
+	{
+		if (IsValid(Spawner))
+		{
+			Spawner->Destroy();
+		}
+	}
+
 	if (IsValid(CentralTower))
 	{
+		CentralTower->StopCombat();
 		CentralTower->Destroy();
 		CentralTower = nullptr;
+	}
+
+	TArray<AActor*> RemainingTowers;
+	UGameplayStatics::GetAllActorsOfClass(this, ACentralTower::StaticClass(), RemainingTowers);
+	for (AActor* Tower : RemainingTowers)
+	{
+		if (IsValid(Tower))
+		{
+			Tower->Destroy();
+		}
 	}
 }
 
@@ -369,7 +418,10 @@ void ATowerDefenseGameMode::StopActiveEnemies()
 	{
 		if (AEnemyBase* Enemy = Cast<AEnemyBase>(Actor))
 		{
-			Enemy->StopBehavior();
+			if (IsValid(Enemy))
+			{
+				Enemy->StopBehavior();
+			}
 		}
 	}
 }
@@ -382,7 +434,10 @@ void ATowerDefenseGameMode::StopActiveDefenders()
 	{
 		if (ADefenderBase* Defender = Cast<ADefenderBase>(Actor))
 		{
-			Defender->StopCombat();
+			if (IsValid(Defender))
+			{
+				Defender->StopCombat();
+			}
 		}
 	}
 }

@@ -53,6 +53,7 @@ protected:
 	void HandleAttackRangeEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	bool IsValidTarget(AActor* Actor) const;
+	bool IsCombatAllowed() const;
 	void StartAttackTimer();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")

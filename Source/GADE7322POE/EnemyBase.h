@@ -68,6 +68,7 @@ protected:
 	void HandleAttackRangeEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	bool IsValidAttackTarget(AActor* Actor) const;
+	bool IsCombatAllowed() const;
 	AActor* GetCentralTowerActor() const;
 	FVector GetWaypointWorldLocation(int32 WaypointIndex) const;
 	void StartAttackTimer();

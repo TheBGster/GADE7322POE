@@ -5,6 +5,7 @@
 #include "EnemyBase.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
+#include "TowerDefenseGameState.h"
 
 AEnemySpawner::AEnemySpawner()
 {
@@ -40,16 +41,20 @@ void AEnemySpawner::StartSpawning()
 	}
 
 	UWorld* World = GetWorld();
-	if (!World)
+	const ATowerDefenseGameState* GameState = World ? World->GetGameState<ATowerDefenseGameState>() : nullptr;
+	if (!World || !GameState || !GameState->IsMatchInProgress())
 	{
+		UE_LOG(LogTowerDefense, Warning, TEXT("Enemy spawner cannot start: match is not in progress."));
 		return;
 	}
 
 	bIsSpawning = true;
-	World->GetTimerManager().SetTimer(SpawnTimerHandle, this, &ThisClass::SpawnEnemy, SpawnInterval, true);
+	World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+	const float Interval = FMath::Max(SpawnInterval, 0.2f);
+	World->GetTimerManager().SetTimer(SpawnTimerHandle, this, &ThisClass::SpawnEnemy, Interval, true);
 	SpawnEnemy();
 
-	UE_LOG(LogTowerDefense, Log, TEXT("Enemy spawner started. Interval: %.1fs"), SpawnInterval);
+	UE_LOG(LogTowerDefense, Log, TEXT("Enemy spawner started. Interval: %.1fs"), Interval);
 }
 
 void AEnemySpawner::StopSpawning()
@@ -66,7 +71,7 @@ void AEnemySpawner::StopSpawning()
 
 void AEnemySpawner::SpawnEnemy()
 {
-	if (!bIsSpawning)
+	if (!CanSpawnNow())
 	{
 		return;
 	}
@@ -96,11 +101,15 @@ void AEnemySpawner::SpawnEnemy()
 		return;
 	}
 
+	const FVector SpawnLocation = Path->SpawnLocation.IsNearlyZero()
+		? Path->Waypoints[0]
+		: Path->SpawnLocation;
+
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	AEnemyBase* Enemy = World->SpawnActor<AEnemyBase>(ClassToSpawn, Path->SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-	if (!Enemy)
+	AEnemyBase* Enemy = World->SpawnActor<AEnemyBase>(ClassToSpawn, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	if (!IsValid(Enemy))
 	{
 		UE_LOG(LogTowerDefense, Error, TEXT("Failed to spawn enemy on path %d."), Path->PathID);
 		return;
@@ -108,7 +117,7 @@ void AEnemySpawner::SpawnEnemy()
 
 	Enemy->SetPath(*Path);
 	UE_LOG(LogTowerDefense, Log, TEXT("Spawned enemy '%s' on path %d at %s."),
-		*Enemy->GetName(), Path->PathID, *Path->SpawnLocation.ToCompactString());
+		*Enemy->GetName(), Path->PathID, *SpawnLocation.ToCompactString());
 }
 
 int32 AEnemySpawner::CountActiveEnemies() const
@@ -128,14 +137,36 @@ int32 AEnemySpawner::CountActiveEnemies() const
 	return AliveCount;
 }
 
-const FGeneratedPath* AEnemySpawner::SelectNextPath() const
+const FGeneratedPath* AEnemySpawner::SelectNextPath()
 {
 	if (GeneratedPaths.Num() == 0)
 	{
 		return nullptr;
 	}
 
-	const FGeneratedPath* Path = &GeneratedPaths[NextPathIndex % GeneratedPaths.Num()];
-	++NextPathIndex;
-	return Path;
+	for (int32 Attempt = 0; Attempt < GeneratedPaths.Num(); ++Attempt)
+	{
+		const int32 PathIndex = NextPathIndex % GeneratedPaths.Num();
+		++NextPathIndex;
+
+		const FGeneratedPath& Path = GeneratedPaths[PathIndex];
+		if (Path.Waypoints.Num() > 0)
+		{
+			return &GeneratedPaths[PathIndex];
+		}
+	}
+
+	return nullptr;
+}
+
+bool AEnemySpawner::CanSpawnNow() const
+{
+	if (!bIsSpawning || GeneratedPaths.Num() == 0)
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	const ATowerDefenseGameState* GameState = World ? World->GetGameState<ATowerDefenseGameState>() : nullptr;
+	return GameState && GameState->IsMatchInProgress();
 }
