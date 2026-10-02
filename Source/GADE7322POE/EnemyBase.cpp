@@ -3,13 +3,17 @@
 #include "EnemyBase.h"
 #include "GADE7322POE.h"
 #include "CentralTower.h"
+#include "CombatStatusWidget.h"
 #include "HealthComponent.h"
 #include "TowerDefenseGameMode.h"
 #include "TowerDefenseGameState.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/WidgetComponent.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Math/NumericLimits.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -30,6 +34,11 @@ AEnemyBase::AEnemyBase()
 	BehaviorState = EEnemyBehaviorState::Moving;
 	bHasReachedDestination = false;
 	bHasGrantedKillReward = false;
+	EnemyKind = EEnemyKind::JungleScout;
+	DisplayName = FText::FromString(TEXT("Jungle Scout"));
+	BodyColor = FLinearColor(0.18f, 0.38f, 0.16f, 1.0f);
+	SlowMultiplier = 1.0f;
+	SpeedBurstMultiplier = 1.0f;
 
 	Tags.Add(TowerDefenseTags::Enemy);
 
@@ -65,6 +74,15 @@ AEnemyBase::AEnemyBase()
 	AttackRangeSphere->SetHiddenInGame(true);
 
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+
+	HealthBarComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthBarComponent"));
+	HealthBarComponent->SetupAttachment(SceneRoot);
+	HealthBarComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	HealthBarComponent->SetDrawAtDesiredSize(false);
+	HealthBarComponent->SetDrawSize(FVector2D(110.0f, 28.0f));
+	HealthBarComponent->SetPivot(FVector2D(0.5f, 1.0f));
+	HealthBarComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 95.0f));
+	HealthBarComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AEnemyBase::BeginPlay()
@@ -82,8 +100,11 @@ void AEnemyBase::BeginPlay()
 	{
 		HealthComponent->InitializeHealth(MaxHealth);
 		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
+		HealthComponent->OnDamaged.AddUniqueDynamic(this, &ThisClass::HandleDamaged);
 	}
 
+	ApplyBodyColor();
+	SetupHealthBar();
 	StartAttackTimer();
 }
 
@@ -100,8 +121,20 @@ void AEnemyBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (HealthComponent)
 	{
 		HealthComponent->OnDeath.RemoveDynamic(this, &ThisClass::Die);
+		HealthComponent->OnDamaged.RemoveDynamic(this, &ThisClass::HandleDamaged);
 	}
 
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DamageFlashTimerHandle);
+		for (TPair<int32, FTimerHandle>& Pair : SlowTimers)
+		{
+			World->GetTimerManager().ClearTimer(Pair.Value);
+		}
+	}
+
+	SlowSources.Reset();
+	SlowTimers.Reset();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -109,12 +142,17 @@ void AEnemyBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!IsCombatAllowed() || BehaviorState != EEnemyBehaviorState::Moving)
+	if (!IsCombatAllowed())
 	{
 		return;
 	}
 
-	MoveAlongPath(DeltaTime);
+	const bool bShouldMove = BehaviorState == EEnemyBehaviorState::Moving
+		|| (ShouldKeepMovingWhileAttacking() && !bHasReachedDestination);
+	if (bShouldMove)
+	{
+		MoveAlongPath(DeltaTime);
+	}
 }
 
 void AEnemyBase::SetPath(const FGeneratedPath& Path)
@@ -174,7 +212,7 @@ void AEnemyBase::MoveAlongPath(float DeltaTime)
 	}
 
 	Direction.Normalize();
-	AddActorWorldOffset(Direction * MoveSpeed * DeltaTime, false);
+	AddActorWorldOffset(Direction * GetEffectiveMoveSpeed() * DeltaTime, false);
 
 	if (!Direction.IsNearlyZero())
 	{
@@ -212,6 +250,12 @@ void AEnemyBase::FindTarget()
 		if (!IsValidAttackTarget(Candidate))
 		{
 			TargetsInRange.RemoveAtSwap(Index);
+			continue;
+		}
+
+		if (!bHasReachedDestination && !ShouldAttackDefendersWhileMoving()
+			&& Candidate->ActorHasTag(TowerDefenseTags::Defender))
+		{
 			continue;
 		}
 
@@ -392,4 +436,146 @@ void AEnemyBase::GrantKillReward()
 	}
 
 	GameState->HandleEnemyKilled(ResourceReward);
+}
+
+void AEnemyBase::ApplyMovementSlow(int32 SourceId, float SlowPercent, float Duration)
+{
+	const float ClampedPercent = FMath::Clamp(SlowPercent, 0.0f, 0.85f);
+	SlowSources.Add(SourceId, ClampedPercent);
+	RecalculateSlow();
+
+	UWorld* World = GetWorld();
+	if (!World || Duration <= 0.0f)
+	{
+		return;
+	}
+
+	FTimerHandle& Timer = SlowTimers.FindOrAdd(SourceId);
+	World->GetTimerManager().ClearTimer(Timer);
+	World->GetTimerManager().SetTimer(Timer, FTimerDelegate::CreateWeakLambda(this, [this, SourceId]()
+	{
+		ClearMovementSlow(SourceId);
+	}), Duration, false);
+}
+
+void AEnemyBase::ClearMovementSlow(int32 SourceId)
+{
+	SlowSources.Remove(SourceId);
+	if (UWorld* World = GetWorld())
+	{
+		if (FTimerHandle* Timer = SlowTimers.Find(SourceId))
+		{
+			World->GetTimerManager().ClearTimer(*Timer);
+		}
+	}
+
+	SlowTimers.Remove(SourceId);
+	RecalculateSlow();
+}
+
+bool AEnemyBase::IsSlowed() const
+{
+	return GetMaxSlowPercent() > 0.0f;
+}
+
+float AEnemyBase::GetEffectiveMoveSpeed() const
+{
+	return MoveSpeed * SlowMultiplier * SpeedBurstMultiplier;
+}
+
+float AEnemyBase::GetMaxSlowPercent() const
+{
+	float MaxSlow = 0.0f;
+	for (const TPair<int32, float>& Pair : SlowSources)
+	{
+		MaxSlow = FMath::Max(MaxSlow, Pair.Value);
+	}
+
+	return MaxSlow;
+}
+
+void AEnemyBase::RecalculateSlow()
+{
+	SlowMultiplier = 1.0f - GetMaxSlowPercent();
+	if (MeshComponent && BodyMaterialInstance && IsSlowed())
+	{
+		BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.35f, 0.75f, 0.95f, 1.0f));
+		BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.35f, 0.75f, 0.95f, 1.0f));
+	}
+	else
+	{
+		RestoreBodyColor();
+	}
+}
+
+void AEnemyBase::HandleDamaged(float DamageAmount, AActor* DamageCauser, AController* InstigatedBy)
+{
+	PlayDamageFlash();
+}
+
+void AEnemyBase::PlayDamageFlash()
+{
+	if (!BodyMaterialInstance)
+	{
+		return;
+	}
+
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.95f, 0.15f, 0.10f, 1.0f));
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.95f, 0.15f, 0.10f, 1.0f));
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DamageFlashTimerHandle);
+		World->GetTimerManager().SetTimer(DamageFlashTimerHandle, this, &ThisClass::RestoreBodyColor, 0.12f, false);
+	}
+}
+
+void AEnemyBase::RestoreBodyColor()
+{
+	if (!BodyMaterialInstance)
+	{
+		return;
+	}
+
+	const FLinearColor Color = IsSlowed()
+		? FLinearColor(0.35f, 0.75f, 0.95f, 1.0f)
+		: BodyColor;
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), Color);
+}
+
+void AEnemyBase::ApplyBodyColor()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	UMaterialInterface* SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	if (!SourceMaterial)
+	{
+		return;
+	}
+
+	BodyMaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
+	if (BodyMaterialInstance)
+	{
+		RestoreBodyColor();
+		MeshComponent->SetMaterial(0, BodyMaterialInstance);
+	}
+}
+
+void AEnemyBase::SetupHealthBar()
+{
+	if (!HealthBarComponent)
+	{
+		return;
+	}
+
+	HealthBarComponent->SetWidgetClass(UCombatStatusWidget::StaticClass());
+	HealthBarComponent->InitWidget();
+	if (UCombatStatusWidget* Status = Cast<UCombatStatusWidget>(HealthBarComponent->GetWidget()))
+	{
+		Status->BindToHealth(HealthComponent, DisplayName);
+	}
 }

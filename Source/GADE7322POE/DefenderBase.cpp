@@ -2,14 +2,18 @@
 
 #include "DefenderBase.h"
 #include "GADE7322POE.h"
+#include "CombatStatusWidget.h"
 #include "DefenderPlacementPoint.h"
 #include "HealthComponent.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefenseTypes.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/WidgetComponent.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Math/NumericLimits.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -22,6 +26,10 @@ ADefenderBase::ADefenderBase()
 	AttackRange = 700.0f;
 	AttackDamage = 20.0f;
 	AttackCooldown = 0.8f;
+	PlacementCost = 25;
+	DefenderKind = EDefenderKind::JungleScout;
+	DisplayName = FText::FromString(TEXT("Jungle Scout"));
+	BodyColor = FLinearColor(0.32f, 0.42f, 0.22f, 1.0f);
 
 	Tags.Add(TowerDefenseTags::Defender);
 
@@ -58,6 +66,14 @@ ADefenderBase::ADefenderBase()
 	AttackRangeSphere->SetHiddenInGame(true);
 
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+
+	HealthBarComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthBarComponent"));
+	HealthBarComponent->SetupAttachment(SceneRoot);
+	HealthBarComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	HealthBarComponent->SetDrawSize(FVector2D(120.0f, 28.0f));
+	HealthBarComponent->SetPivot(FVector2D(0.5f, 1.0f));
+	HealthBarComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 170.0f));
+	HealthBarComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void ADefenderBase::BeginPlay()
@@ -75,8 +91,11 @@ void ADefenderBase::BeginPlay()
 	{
 		HealthComponent->InitializeHealth(MaxHealth);
 		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
+		HealthComponent->OnDamaged.AddUniqueDynamic(this, &ThisClass::HandleDamaged);
 	}
 
+	ApplyBodyColor();
+	SetupHealthBar();
 	StartAttackTimer();
 	UE_LOG(LogTowerDefense, Log, TEXT("Defender '%s' placed at %s."), *GetName(), *GetActorLocation().ToCompactString());
 }
@@ -94,6 +113,12 @@ void ADefenderBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (HealthComponent)
 	{
 		HealthComponent->OnDeath.RemoveDynamic(this, &ThisClass::Die);
+		HealthComponent->OnDamaged.RemoveDynamic(this, &ThisClass::HandleDamaged);
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DamageFlashTimerHandle);
 	}
 
 	if (ADefenderPlacementPoint* PlacementPoint = OwningPlacementPoint.Get())
@@ -254,4 +279,73 @@ void ADefenderBase::StartAttackTimer()
 	World->GetTimerManager().ClearTimer(AttackTimerHandle);
 	const float Interval = FMath::Max(AttackCooldown, 0.1f);
 	World->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::AttackTarget, Interval, true);
+}
+
+void ADefenderBase::HandleDamaged(float DamageAmount, AActor* DamageCauser, AController* InstigatedBy)
+{
+	PlayDamageFlash();
+}
+
+void ADefenderBase::PlayDamageFlash()
+{
+	if (!BodyMaterialInstance)
+	{
+		return;
+	}
+
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.95f, 0.18f, 0.12f, 1.0f));
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.95f, 0.18f, 0.12f, 1.0f));
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DamageFlashTimerHandle);
+		World->GetTimerManager().SetTimer(DamageFlashTimerHandle, this, &ThisClass::RestoreBodyColor, 0.12f, false);
+	}
+}
+
+void ADefenderBase::RestoreBodyColor()
+{
+	if (!BodyMaterialInstance)
+	{
+		return;
+	}
+
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), BodyColor);
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), BodyColor);
+}
+
+void ADefenderBase::ApplyBodyColor()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	UMaterialInterface* SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	if (!SourceMaterial)
+	{
+		return;
+	}
+
+	BodyMaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
+	if (BodyMaterialInstance)
+	{
+		RestoreBodyColor();
+		MeshComponent->SetMaterial(0, BodyMaterialInstance);
+	}
+}
+
+void ADefenderBase::SetupHealthBar()
+{
+	if (!HealthBarComponent)
+	{
+		return;
+	}
+
+	HealthBarComponent->SetWidgetClass(UCombatStatusWidget::StaticClass());
+	HealthBarComponent->InitWidget();
+	if (UCombatStatusWidget* Status = Cast<UCombatStatusWidget>(HealthBarComponent->GetWidget()))
+	{
+		Status->BindToHealth(HealthComponent, DisplayName);
+	}
 }

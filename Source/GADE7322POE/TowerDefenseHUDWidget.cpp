@@ -2,6 +2,7 @@
 
 #include "TowerDefenseHUDWidget.h"
 #include "TowerDefenseGameState.h"
+#include "TowerDefensePlayerController.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -49,14 +50,17 @@ void UTowerDefenseHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	LastEnemiesInWave = 0;
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	BindToGameState();
+	BindToPlayerController();
 	RefreshFromGameState();
 }
 
 void UTowerDefenseHUDWidget::NativeDestruct()
 {
 	UnbindFromGameState();
+	UnbindFromPlayerController();
 	Super::NativeDestruct();
 }
 
@@ -101,8 +105,10 @@ void UTowerDefenseHUDWidget::BuildDefaultLayout()
 	HealthBarSize->SetVisibility(ESlateVisibility::HitTestInvisible);
 	HealthBarSize->AddChild(TowerHealthBar);
 
+	WaveText = MakeHUDText(WidgetTree, TEXT("WaveText"), TEXT("Wave: --"), 18, FLinearColor(0.75f, 0.90f, 1.0f));
 	ResourcesText = MakeHUDText(WidgetTree, TEXT("ResourcesText"), TEXT("Resources: --"), 18, FLinearColor::White);
-	DefenderCostText = MakeHUDText(WidgetTree, TEXT("DefenderCostText"), TEXT("Defender Cost: --"), 16, FLinearColor(0.85f, 0.85f, 0.85f));
+	DefenderCostText = MakeHUDText(WidgetTree, TEXT("DefenderCostText"), TEXT("Scout 25  |  Cannon 50  |  Vine 35"), 15, FLinearColor(0.85f, 0.85f, 0.85f));
+	SelectedDefenderText = MakeHUDText(WidgetTree, TEXT("SelectedDefenderText"), TEXT("Selected: Jungle Scout"), 16, FLinearColor(0.95f, 0.85f, 0.35f));
 
 	auto AddInfoChild = [InfoBox](UWidget* Child, float BottomPadding)
 	{
@@ -113,9 +119,11 @@ void UTowerDefenseHUDWidget::BuildDefaultLayout()
 	};
 
 	AddInfoChild(TowerHealthText, 6.0f);
-	AddInfoChild(HealthBarSize, 12.0f);
+	AddInfoChild(HealthBarSize, 8.0f);
+	AddInfoChild(WaveText, 8.0f);
 	AddInfoChild(ResourcesText, 4.0f);
-	AddInfoChild(DefenderCostText, 0.0f);
+	AddInfoChild(DefenderCostText, 4.0f);
+	AddInfoChild(SelectedDefenderText, 0.0f);
 
 	if (UCanvasPanelSlot* InfoSlot = RootCanvas->AddChildToCanvas(InfoPanel))
 	{
@@ -128,7 +136,7 @@ void UTowerDefenseHUDWidget::BuildDefaultLayout()
 	InstructionsText = MakeHUDText(
 		WidgetTree,
 		TEXT("InstructionsText"),
-		TEXT("Left-click a pad to place a defender."),
+		TEXT("1 Scout   2 Cannon   3 Vine Trap   |   Click a pad to place."),
 		16,
 		FLinearColor(0.92f, 0.92f, 0.92f));
 
@@ -159,6 +167,7 @@ void UTowerDefenseHUDWidget::BindToGameState()
 	BoundGameState = GameState;
 	GameState->OnResourcesChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleResourcesChanged);
 	GameState->OnTowerHealthChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleTowerHealthChanged);
+	GameState->OnWaveChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleWaveChanged);
 }
 
 void UTowerDefenseHUDWidget::UnbindFromGameState()
@@ -167,6 +176,7 @@ void UTowerDefenseHUDWidget::UnbindFromGameState()
 	{
 		GameState->OnResourcesChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleResourcesChanged);
 		GameState->OnTowerHealthChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleTowerHealthChanged);
+		GameState->OnWaveChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleWaveChanged);
 	}
 
 	BoundGameState.Reset();
@@ -179,6 +189,8 @@ void UTowerDefenseHUDWidget::RefreshFromGameState()
 	{
 		UpdateResourcesDisplay(0, 0);
 		UpdateTowerHealthDisplay(0.0f, 0.0f);
+		UpdateWaveDisplay(0, 0, 0);
+		UpdateSelectedDefenderDisplay();
 		OnHUDUpdated(0, 0, 0.0f, 0.0f);
 		return;
 	}
@@ -190,6 +202,8 @@ void UTowerDefenseHUDWidget::RefreshFromGameState()
 
 	UpdateResourcesDisplay(Resources, DefenderCost);
 	UpdateTowerHealthDisplay(CurrentHealth, MaxHealth);
+	UpdateWaveDisplay(GameState->GetCurrentWave(), LastEnemiesInWave, GameState->GetEnemiesDefeated());
+	UpdateSelectedDefenderDisplay();
 	OnHUDUpdated(Resources, DefenderCost, CurrentHealth, MaxHealth);
 }
 
@@ -201,6 +215,10 @@ void UTowerDefenseHUDWidget::HandleResourcesChanged(int32 NewResourceAmount)
 	const float MaxHealth = GameState ? GameState->GetTowerMaxHealth() : 0.0f;
 
 	UpdateResourcesDisplay(NewResourceAmount, DefenderCost);
+	if (GameState)
+	{
+		UpdateWaveDisplay(GameState->GetCurrentWave(), LastEnemiesInWave, GameState->GetEnemiesDefeated());
+	}
 	OnHUDUpdated(NewResourceAmount, DefenderCost, CurrentHealth, MaxHealth);
 }
 
@@ -214,9 +232,123 @@ void UTowerDefenseHUDWidget::HandleTowerHealthChanged(float CurrentHealth, float
 	OnHUDUpdated(Resources, DefenderCost, CurrentHealth, MaxHealth);
 }
 
+void UTowerDefenseHUDWidget::HandleWaveChanged(int32 NewWave, int32 EnemiesInWave)
+{
+	const ATowerDefenseGameState* GameState = GetTowerDefenseGameState();
+	const int32 Defeated = GameState ? GameState->GetEnemiesDefeated() : 0;
+	UpdateWaveDisplay(NewWave, EnemiesInWave, Defeated);
+}
+
+void UTowerDefenseHUDWidget::HandleSelectedDefenderChanged(EDefenderKind Kind, int32 Cost)
+{
+	UpdateSelectedDefenderDisplay();
+	if (const ATowerDefenseGameState* GameState = GetTowerDefenseGameState())
+	{
+		UpdateResourcesDisplay(GameState->GetCurrentResources(), Cost);
+	}
+
+	(void)Kind;
+}
+
+void UTowerDefenseHUDWidget::BindToPlayerController()
+{
+	ATowerDefensePlayerController* PlayerController = Cast<ATowerDefensePlayerController>(GetOwningPlayer());
+	if (BoundPlayerController.Get() == PlayerController)
+	{
+		return;
+	}
+
+	UnbindFromPlayerController();
+
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	BoundPlayerController = PlayerController;
+	PlayerController->OnSelectedDefenderChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleSelectedDefenderChanged);
+}
+
+void UTowerDefenseHUDWidget::UnbindFromPlayerController()
+{
+	if (ATowerDefensePlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		PlayerController->OnSelectedDefenderChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleSelectedDefenderChanged);
+	}
+
+	BoundPlayerController.Reset();
+}
+
+void UTowerDefenseHUDWidget::UpdateWaveDisplay(int32 Wave, int32 EnemiesInWave, int32 EnemiesDefeated)
+{
+	LastEnemiesInWave = EnemiesInWave;
+
+	if (!WaveText)
+	{
+		return;
+	}
+
+	if (Wave <= 0)
+	{
+		WaveText->SetText(NSLOCTEXT("TowerDefense", "WaveWaitingHUD", "Wave: preparing..."));
+		return;
+	}
+
+	if (EnemiesInWave > 0)
+	{
+		WaveText->SetText(FText::Format(
+			NSLOCTEXT("TowerDefense", "WaveHUDWithCount", "Wave {0}   |   {1} incoming   |   Defeated {2}"),
+			FText::AsNumber(Wave),
+			FText::AsNumber(EnemiesInWave),
+			FText::AsNumber(EnemiesDefeated)));
+	}
+	else
+	{
+		WaveText->SetText(FText::Format(
+			NSLOCTEXT("TowerDefense", "WaveHUD", "Wave {0}   |   Defeated {1}"),
+			FText::AsNumber(Wave),
+			FText::AsNumber(EnemiesDefeated)));
+	}
+}
+
+void UTowerDefenseHUDWidget::UpdateSelectedDefenderDisplay()
+{
+	const ATowerDefensePlayerController* PlayerController = BoundPlayerController.Get();
+	if (!PlayerController)
+	{
+		PlayerController = Cast<ATowerDefensePlayerController>(GetOwningPlayer());
+	}
+
+	const FText Name = PlayerController
+		? PlayerController->GetSelectedDefenderDisplayName()
+		: FText::FromString(TEXT("Jungle Scout"));
+	const int32 Cost = PlayerController ? PlayerController->GetSelectedDefenderCost() : 25;
+
+	if (SelectedDefenderText)
+	{
+		SelectedDefenderText->SetText(FText::Format(
+			NSLOCTEXT("TowerDefense", "SelectedDefenderHUD", "Selected: {0} ({1})"),
+			Name,
+			FText::AsNumber(Cost)));
+	}
+}
+
 void UTowerDefenseHUDWidget::UpdateResourcesDisplay(int32 Resources, int32 DefenderCost)
 {
-	const bool bCanAfford = DefenderCost > 0 && Resources >= DefenderCost;
+	const ATowerDefenseGameState* GameState = GetTowerDefenseGameState();
+	const int32 ScoutCost = GameState ? GameState->GetDefenderCostForKind(EDefenderKind::JungleScout) : 25;
+	const int32 CannonCost = GameState ? GameState->GetDefenderCostForKind(EDefenderKind::BananaCannon) : 50;
+	const int32 VineCost = GameState ? GameState->GetDefenderCostForKind(EDefenderKind::VineTrap) : 35;
+
+	int32 SelectedCost = DefenderCost;
+	FText SelectedName = FText::FromString(TEXT("Jungle Scout"));
+	if (const ATowerDefensePlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		SelectedCost = PlayerController->GetSelectedDefenderCost();
+		SelectedName = PlayerController->GetSelectedDefenderDisplayName();
+	}
+
+	const bool bCanAfford = SelectedCost > 0 && Resources >= SelectedCost;
 	const FLinearColor ResourceColor = bCanAfford
 		? FLinearColor(0.95f, 0.90f, 0.35f)
 		: FLinearColor(0.95f, 0.35f, 0.32f);
@@ -229,14 +361,25 @@ void UTowerDefenseHUDWidget::UpdateResourcesDisplay(int32 Resources, int32 Defen
 
 	if (DefenderCostText)
 	{
-		DefenderCostText->SetText(FText::Format(NSLOCTEXT("TowerDefense", "DefenderCostHUD", "Defender Cost: {0}"), FText::AsNumber(DefenderCost)));
+		DefenderCostText->SetText(FText::Format(
+			NSLOCTEXT("TowerDefense", "DefenderCostsHUD", "Scout {0}  |  Cannon {1}  |  Vine {2}"),
+			FText::AsNumber(ScoutCost),
+			FText::AsNumber(CannonCost),
+			FText::AsNumber(VineCost)));
 	}
+
+	UpdateSelectedDefenderDisplay();
 
 	if (InstructionsText)
 	{
 		InstructionsText->SetText(bCanAfford
-			? NSLOCTEXT("TowerDefense", "PlaceInstruction", "Left-click a pad to place a defender.")
-			: NSLOCTEXT("TowerDefense", "NeedResourcesInstruction", "Defeat enemies to earn resources, then place a defender."));
+			? FText::Format(
+				NSLOCTEXT("TowerDefense", "PlaceSelectedInstruction", "1 / 2 / 3 to choose   |   Click a pad to place {0}."),
+				SelectedName)
+			: FText::Format(
+				NSLOCTEXT("TowerDefense", "NeedResourcesSelected", "Need {0} resources for {1}. Defeat enemies or pick a cheaper defender."),
+				FText::AsNumber(SelectedCost),
+				SelectedName));
 	}
 }
 

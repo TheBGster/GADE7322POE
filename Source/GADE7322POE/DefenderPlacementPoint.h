@@ -31,6 +31,9 @@ public:
 	bool PlaceDefender();
 
 	UFUNCTION(BlueprintCallable, Category = "Placement")
+	bool PlaceDefenderOfClass(TSubclassOf<ADefenderBase> ClassToPlace);
+
+	UFUNCTION(BlueprintCallable, Category = "Placement")
 	void SetOccupied(bool bOccupied);
 
 	UFUNCTION(BlueprintCallable, Category = "Placement")

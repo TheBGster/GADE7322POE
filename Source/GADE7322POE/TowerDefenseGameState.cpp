@@ -7,11 +7,15 @@ ATowerDefenseGameState::ATowerDefenseGameState()
 {
 	StartingResources = 100;
 	DefenderCost = 25;
+	BananaCannonCost = 50;
+	VineTrapCost = 35;
 	EnemyKillReward = 10;
 	CurrentResources = StartingResources;
 	TowerMaxHealth = 0.0f;
 	TowerCurrentHealth = 0.0f;
 	MatchState = ETowerDefenseMatchState::WaitingToStart;
+	CurrentWave = 0;
+	EnemiesDefeated = 0;
 }
 
 void ATowerDefenseGameState::ResetForNewGame()
@@ -20,10 +24,13 @@ void ATowerDefenseGameState::ResetForNewGame()
 	TowerMaxHealth = 0.0f;
 	TowerCurrentHealth = 0.0f;
 	MatchState = ETowerDefenseMatchState::WaitingToStart;
+	CurrentWave = 0;
+	EnemiesDefeated = 0;
 
 	OnResourcesChanged.Broadcast(CurrentResources);
 	OnTowerHealthChanged.Broadcast(TowerCurrentHealth, TowerMaxHealth);
 	OnMatchStateChanged.Broadcast(MatchState);
+	OnWaveChanged.Broadcast(CurrentWave, 0);
 
 	UE_LOG(LogTowerDefense, Log, TEXT("Game state reset. Starting resources: %d"), CurrentResources);
 }
@@ -50,6 +57,11 @@ bool ATowerDefenseGameState::CanAfford(int32 Cost) const
 bool ATowerDefenseGameState::CanAffordDefender() const
 {
 	return CanAfford(DefenderCost);
+}
+
+bool ATowerDefenseGameState::CanAffordDefenderKind(EDefenderKind Kind) const
+{
+	return CanAfford(GetDefenderCostForKind(Kind));
 }
 
 void ATowerDefenseGameState::AddResources(int32 Amount)
@@ -93,13 +105,32 @@ void ATowerDefenseGameState::HandleEnemyKilled(int32 RewardOverride)
 	}
 
 	const int32 Reward = RewardOverride >= 0 ? RewardOverride : EnemyKillReward;
-	if (Reward <= 0)
+	++EnemiesDefeated;
+	if (Reward > 0)
 	{
-		return;
+		AddResources(Reward);
 	}
+	UE_LOG(LogTowerDefense, Log, TEXT("Enemy kill reward applied. +%d  Defeated: %d"), Reward, EnemiesDefeated);
+}
 
-	AddResources(Reward);
-	UE_LOG(LogTowerDefense, Log, TEXT("Enemy kill reward applied. +%d"), Reward);
+int32 ATowerDefenseGameState::GetDefenderCostForKind(EDefenderKind Kind) const
+{
+	switch (Kind)
+	{
+	case EDefenderKind::BananaCannon:
+		return BananaCannonCost;
+	case EDefenderKind::VineTrap:
+		return VineTrapCost;
+	default:
+		return DefenderCost;
+	}
+}
+
+void ATowerDefenseGameState::SetCurrentWave(int32 NewWave, int32 EnemiesInWave)
+{
+	CurrentWave = FMath::Max(NewWave, 0);
+	OnWaveChanged.Broadcast(CurrentWave, EnemiesInWave);
+	UE_LOG(LogTowerDefense, Log, TEXT("Wave %d started (%d enemies)."), CurrentWave, EnemiesInWave);
 }
 
 void ATowerDefenseGameState::SetTowerHealth(float NewCurrentHealth, float NewMaxHealth)

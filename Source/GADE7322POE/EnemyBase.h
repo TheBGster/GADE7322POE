@@ -11,6 +11,8 @@ class UHealthComponent;
 class USphereComponent;
 class UStaticMeshComponent;
 class USceneComponent;
+class UWidgetComponent;
+class UMaterialInstanceDynamic;
 
 UENUM(BlueprintType)
 enum class EEnemyBehaviorState : uint8
@@ -44,6 +46,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy")
 	int32 GetAssignedPathID() const { return AssignedPath.PathID; }
 
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	EEnemyKind GetEnemyKind() const { return EnemyKind; }
+
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	FText GetDisplayName() const { return DisplayName; }
+
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Movement")
+	void ApplyMovementSlow(int32 SourceId, float SlowPercent, float Duration);
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Movement")
+	void ClearMovementSlow(int32 SourceId);
+
+	UFUNCTION(BlueprintPure, Category = "Enemy|Movement")
+	bool IsSlowed() const;
+
+	UFUNCTION(BlueprintPure, Category = "Enemy|Movement")
+	float GetEffectiveMoveSpeed() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -53,10 +76,10 @@ protected:
 	void AdvanceToNextWaypoint();
 
 	UFUNCTION()
-	void FindTarget();
+	virtual void FindTarget();
 
 	UFUNCTION()
-	void AttackTarget();
+	virtual void AttackTarget();
 
 	UFUNCTION()
 	void Die(AActor* DeadActor);
@@ -67,12 +90,23 @@ protected:
 	UFUNCTION()
 	void HandleAttackRangeEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
+	UFUNCTION()
+	virtual void HandleDamaged(float DamageAmount, AActor* DamageCauser, AController* InstigatedBy);
+
 	bool IsValidAttackTarget(AActor* Actor) const;
 	bool IsCombatAllowed() const;
+	virtual bool ShouldKeepMovingWhileAttacking() const { return false; }
+	virtual bool ShouldAttackDefendersWhileMoving() const { return true; }
 	AActor* GetCentralTowerActor() const;
 	FVector GetWaypointWorldLocation(int32 WaypointIndex) const;
 	void StartAttackTimer();
 	void GrantKillReward();
+	void ApplyBodyColor();
+	void SetupHealthBar();
+	void PlayDamageFlash();
+	void RestoreBodyColor();
+	void RecalculateSlow();
+	float GetMaxSlowPercent() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -85,6 +119,18 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UHealthComponent> HealthComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|UI")
+	TObjectPtr<UWidgetComponent> HealthBarComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy")
+	EEnemyKind EnemyKind;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy")
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Visual")
+	FLinearColor BodyColor;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Health", meta = (ClampMin = "1.0"))
 	float MaxHealth;
@@ -120,7 +166,13 @@ protected:
 	EEnemyBehaviorState BehaviorState;
 
 	FTimerHandle AttackTimerHandle;
+	FTimerHandle DamageFlashTimerHandle;
 	TArray<TWeakObjectPtr<AActor>> TargetsInRange;
+	TMap<int32, float> SlowSources;
+	TMap<int32, FTimerHandle> SlowTimers;
+	TObjectPtr<UMaterialInstanceDynamic> BodyMaterialInstance;
+	float SlowMultiplier;
+	float SpeedBurstMultiplier;
 	bool bHasReachedDestination;
 	bool bHasGrantedKillReward;
 };

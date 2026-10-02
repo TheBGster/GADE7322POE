@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TowerDefenseTypes.h"
 #include "DefenderBase.generated.h"
 
 class UHealthComponent;
 class USphereComponent;
 class UStaticMeshComponent;
 class USceneComponent;
+class UWidgetComponent;
+class UMaterialInstanceDynamic;
 class ADefenderPlacementPoint;
 
 /**
@@ -33,15 +36,33 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Defender")
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	EDefenderKind GetDefenderKind() const { return DefenderKind; }
+
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	FText GetDisplayName() const { return DisplayName; }
+
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	int32 GetPlacementCost() const { return PlacementCost; }
+
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	float GetAttackRange() const { return AttackRange; }
+
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	float GetAttackDamage() const { return AttackDamage; }
+
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	float GetAttackCooldown() const { return AttackCooldown; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION()
-	void FindTarget();
+	virtual void FindTarget();
 
 	UFUNCTION()
-	void AttackTarget();
+	virtual void AttackTarget();
 
 	UFUNCTION()
 	void Die(AActor* DeadActor);
@@ -52,9 +73,16 @@ protected:
 	UFUNCTION()
 	void HandleAttackRangeEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
+	UFUNCTION()
+	void HandleDamaged(float DamageAmount, AActor* DamageCauser, AController* InstigatedBy);
+
 	bool IsValidTarget(AActor* Actor) const;
 	bool IsCombatAllowed() const;
 	void StartAttackTimer();
+	void ApplyBodyColor();
+	void SetupHealthBar();
+	void PlayDamageFlash();
+	void RestoreBodyColor();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -67,6 +95,21 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<UHealthComponent> HealthComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender|UI")
+	TObjectPtr<UWidgetComponent> HealthBarComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	EDefenderKind DefenderKind;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Economy", meta = (ClampMin = "0"))
+	int32 PlacementCost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual")
+	FLinearColor BodyColor;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Health", meta = (ClampMin = "1.0"))
 	float MaxHealth;
@@ -87,5 +130,7 @@ protected:
 	TWeakObjectPtr<ADefenderPlacementPoint> OwningPlacementPoint;
 
 	FTimerHandle AttackTimerHandle;
+	FTimerHandle DamageFlashTimerHandle;
 	TArray<TWeakObjectPtr<AActor>> TargetsInRange;
+	TObjectPtr<UMaterialInstanceDynamic> BodyMaterialInstance;
 };

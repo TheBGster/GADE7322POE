@@ -2,11 +2,14 @@
 
 #include "TowerDefensePlayerController.h"
 #include "GADE7322POE.h"
+#include "BananaCannon.h"
+#include "DefenderBase.h"
 #include "DefenderPlacementPoint.h"
 #include "GameFramework/DamageType.h"
 #include "HealthComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "TowerDefenseGameState.h"
+#include "VineTrap.h"
 
 ATowerDefensePlayerController::ATowerDefensePlayerController()
 {
@@ -16,6 +19,8 @@ ATowerDefensePlayerController::ATowerDefensePlayerController()
 	DefaultMouseCursor = EMouseCursor::Default;
 	DebugDamageAmount = 25.0f;
 	bApplyDebugDamageOnSelect = false;
+	SelectedDefenderKind = EDefenderKind::JungleScout;
+	SelectedDefenderClass = ADefenderBase::StaticClass();
 }
 
 void ATowerDefensePlayerController::BeginPlay()
@@ -27,7 +32,10 @@ void ATowerDefensePlayerController::BeginPlay()
 	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
 
-	UE_LOG(LogTowerDefense, Log, TEXT("Tower Defense player controller ready. Click a pad to place a defender (cost %d)."), GetDefenderCost());
+	ResolveSelectedClass();
+	OnSelectedDefenderChanged.Broadcast(SelectedDefenderKind, GetSelectedDefenderCost());
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Player controller ready. Press 1/2/3 to choose a defender, then click a pad."));
 }
 
 void ATowerDefensePlayerController::SetupInputComponent()
@@ -37,6 +45,80 @@ void ATowerDefensePlayerController::SetupInputComponent()
 	if (InputComponent)
 	{
 		InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ThisClass::HandleSelectPressed);
+		InputComponent->BindKey(EKeys::One, IE_Pressed, this, &ThisClass::SelectJungleScout);
+		InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &ThisClass::SelectBananaCannon);
+		InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &ThisClass::SelectVineTrap);
+	}
+}
+
+void ATowerDefensePlayerController::SelectJungleScout()
+{
+	SelectDefenderKind(EDefenderKind::JungleScout);
+}
+
+void ATowerDefensePlayerController::SelectBananaCannon()
+{
+	SelectDefenderKind(EDefenderKind::BananaCannon);
+}
+
+void ATowerDefensePlayerController::SelectVineTrap()
+{
+	SelectDefenderKind(EDefenderKind::VineTrap);
+}
+
+void ATowerDefensePlayerController::SelectDefenderKind(EDefenderKind Kind)
+{
+	SelectedDefenderKind = Kind;
+	ResolveSelectedClass();
+	OnSelectedDefenderChanged.Broadcast(SelectedDefenderKind, GetSelectedDefenderCost());
+	UE_LOG(LogTowerDefense, Log, TEXT("Selected defender: %s (cost %d)."),
+		*GetSelectedDefenderDisplayName().ToString(), GetSelectedDefenderCost());
+}
+
+void ATowerDefensePlayerController::ResolveSelectedClass()
+{
+	switch (SelectedDefenderKind)
+	{
+	case EDefenderKind::BananaCannon:
+		SelectedDefenderClass = ABananaCannon::StaticClass();
+		break;
+	case EDefenderKind::VineTrap:
+		SelectedDefenderClass = AVineTrap::StaticClass();
+		break;
+	default:
+		SelectedDefenderClass = ADefenderBase::StaticClass();
+		break;
+	}
+}
+
+int32 ATowerDefensePlayerController::GetSelectedDefenderCost() const
+{
+	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	{
+		return GameState->GetDefenderCostForKind(SelectedDefenderKind);
+	}
+
+	switch (SelectedDefenderKind)
+	{
+	case EDefenderKind::BananaCannon:
+		return 50;
+	case EDefenderKind::VineTrap:
+		return 35;
+	default:
+		return 25;
+	}
+}
+
+FText ATowerDefensePlayerController::GetSelectedDefenderDisplayName() const
+{
+	switch (SelectedDefenderKind)
+	{
+	case EDefenderKind::BananaCannon:
+		return FText::FromString(TEXT("Banana Cannon"));
+	case EDefenderKind::VineTrap:
+		return FText::FromString(TEXT("Vine Trap"));
+	default:
+		return FText::FromString(TEXT("Jungle Scout"));
 	}
 }
 
@@ -93,28 +175,19 @@ void ATowerDefensePlayerController::TryPlaceDefender(ADefenderPlacementPoint* Pl
 		return;
 	}
 
-	const int32 Cost = GameState->GetDefenderCost();
-	if (!GameState->TrySpendDefenderCost())
+	ResolveSelectedClass();
+	const int32 Cost = GameState->GetDefenderCostForKind(SelectedDefenderKind);
+	if (!GameState->SpendResources(Cost))
 	{
-		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot afford a defender. Cost: %d  Current resources: %d"),
-			Cost, GameState->GetCurrentResources());
+		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot afford %s. Cost: %d  Current resources: %d"),
+			*GetSelectedDefenderDisplayName().ToString(), Cost, GameState->GetCurrentResources());
 		return;
 	}
 
-	if (!PlacementPoint->PlaceDefender())
+	if (!PlacementPoint->PlaceDefenderOfClass(SelectedDefenderClass))
 	{
 		GameState->AddResources(Cost);
 	}
-}
-
-int32 ATowerDefensePlayerController::GetDefenderCost() const
-{
-	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
-	{
-		return GameState->GetDefenderCost();
-	}
-
-	return 25;
 }
 
 bool ATowerDefensePlayerController::GetSelectionHit(FHitResult& OutHit) const

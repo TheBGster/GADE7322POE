@@ -45,6 +45,11 @@ bool ADefenderPlacementPoint::CanPlaceDefender() const
 
 bool ADefenderPlacementPoint::PlaceDefender()
 {
+	return PlaceDefenderOfClass(DefenderClass);
+}
+
+bool ADefenderPlacementPoint::PlaceDefenderOfClass(TSubclassOf<ADefenderBase> ClassToPlace)
+{
 	if (!CanPlaceDefender())
 	{
 		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot place a defender on '%s'."), *GetName());
@@ -57,7 +62,7 @@ bool ADefenderPlacementPoint::PlaceDefender()
 		return false;
 	}
 
-	UClass* ClassToSpawn = DefenderClass.Get();
+	UClass* ClassToSpawn = ClassToPlace ? ClassToPlace.Get() : DefenderClass.Get();
 	if (!ClassToSpawn)
 	{
 		ClassToSpawn = ADefenderBase::StaticClass();

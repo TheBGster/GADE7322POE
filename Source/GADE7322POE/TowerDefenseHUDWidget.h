@@ -4,11 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "TowerDefenseTypes.h"
 #include "TowerDefenseHUDWidget.generated.h"
 
 class UTextBlock;
 class UProgressBar;
 class ATowerDefenseGameState;
+class ATowerDefensePlayerController;
 
 /**
  * In-game HUD: tower health, resources, defender cost, and placement help.
@@ -39,6 +41,12 @@ protected:
 	UFUNCTION()
 	void HandleTowerHealthChanged(float CurrentHealth, float MaxHealth);
 
+	UFUNCTION()
+	void HandleWaveChanged(int32 NewWave, int32 EnemiesInWave);
+
+	UFUNCTION()
+	void HandleSelectedDefenderChanged(EDefenderKind Kind, int32 Cost);
+
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UTextBlock> TowerHealthText;
 
@@ -54,12 +62,24 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UTextBlock> InstructionsText;
 
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UTextBlock> WaveText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UTextBlock> SelectedDefenderText;
+
 	void BuildDefaultLayout();
 	void BindToGameState();
 	void UnbindFromGameState();
+	void BindToPlayerController();
+	void UnbindFromPlayerController();
 	void UpdateResourcesDisplay(int32 Resources, int32 DefenderCost);
 	void UpdateTowerHealthDisplay(float CurrentHealth, float MaxHealth);
+	void UpdateWaveDisplay(int32 Wave, int32 EnemiesInWave, int32 EnemiesDefeated);
+	void UpdateSelectedDefenderDisplay();
 	ATowerDefenseGameState* GetTowerDefenseGameState() const;
 
 	TWeakObjectPtr<ATowerDefenseGameState> BoundGameState;
+	TWeakObjectPtr<ATowerDefensePlayerController> BoundPlayerController;
+	int32 LastEnemiesInWave = 0;
 };

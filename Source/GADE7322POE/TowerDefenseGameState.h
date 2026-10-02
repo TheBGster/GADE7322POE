@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
+#include "TowerDefenseTypes.h"
 #include "TowerDefenseGameState.generated.h"
 
 UENUM(BlueprintType)
@@ -17,6 +18,7 @@ enum class ETowerDefenseMatchState : uint8
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchStateChanged, ETowerDefenseMatchState, NewState);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewResourceAmount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTowerHealthChanged, float, CurrentHealth, float, MaxHealth);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaveChanged, int32, NewWave, int32, EnemiesInWave);
 
 /**
  * Shared match data for the tower defence game.
@@ -38,6 +40,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
 	FOnTowerHealthChanged OnTowerHealthChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
+	FOnWaveChanged OnWaveChanged;
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense")
 	void ResetForNewGame();
@@ -61,6 +66,18 @@ public:
 	int32 GetDefenderCost() const { return DefenderCost; }
 
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
+	int32 GetDefenderCostForKind(EDefenderKind Kind) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Waves")
+	int32 GetCurrentWave() const { return CurrentWave; }
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Waves")
+	int32 GetEnemiesDefeated() const { return EnemiesDefeated; }
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Waves")
+	void SetCurrentWave(int32 NewWave, int32 EnemiesInWave = 0);
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
 	int32 GetEnemyKillReward() const { return EnemyKillReward; }
 
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
@@ -68,6 +85,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
 	bool CanAffordDefender() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
+	bool CanAffordDefenderKind(EDefenderKind Kind) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Resources")
 	void AddResources(int32 Amount);
@@ -98,6 +118,12 @@ protected:
 	int32 DefenderCost;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
+	int32 BananaCannonCost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
+	int32 VineTrapCost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
 	int32 EnemyKillReward;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources")
@@ -111,4 +137,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense")
 	ETowerDefenseMatchState MatchState;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Waves")
+	int32 CurrentWave;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Waves")
+	int32 EnemiesDefeated;
 };
