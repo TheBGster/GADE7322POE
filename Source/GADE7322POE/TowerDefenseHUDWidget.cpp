@@ -13,6 +13,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "TimerManager.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateBrush.h"
 #include "Styling/SlateTypes.h"
@@ -62,6 +63,10 @@ void UTowerDefenseHUDWidget::NativeDestruct()
 {
 	UnbindFromGameState();
 	UnbindFromPlayerController();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PlacementFeedbackTimerHandle);
+	}
 	Super::NativeDestruct();
 }
 
@@ -155,6 +160,22 @@ void UTowerDefenseHUDWidget::BuildDefaultLayout()
 		BarSlot->SetAnchors(FAnchors(0.0f, 1.0f, 1.0f, 1.0f));
 		BarSlot->SetAlignment(FVector2D(0.5f, 1.0f));
 		BarSlot->SetOffsets(FMargin(20.0f, -176.0f, 20.0f, 10.0f));
+	}
+
+	PlacementFeedbackText = MakeHUDText(
+		WidgetTree,
+		TEXT("PlacementFeedbackText"),
+		TEXT(""),
+		20,
+		FLinearColor(0.35f, 0.90f, 0.40f));
+	PlacementFeedbackText->SetVisibility(ESlateVisibility::Collapsed);
+
+	if (UCanvasPanelSlot* FeedbackSlot = RootCanvas->AddChildToCanvas(PlacementFeedbackText))
+	{
+		FeedbackSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+		FeedbackSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		FeedbackSlot->SetPosition(FVector2D(0.0f, 180.0f));
+		FeedbackSlot->SetAutoSize(true);
 	}
 }
 
@@ -432,6 +453,32 @@ void UTowerDefenseHUDWidget::UpdateTowerHealthDisplay(float CurrentHealth, float
 			? FLinearColor(0.20f, 0.78f, 0.32f)
 			: (Percent > 0.2f ? FLinearColor(0.92f, 0.72f, 0.18f) : FLinearColor(0.90f, 0.22f, 0.18f));
 		TowerHealthBar->SetFillColorAndOpacity(FillColor);
+	}
+}
+
+void UTowerDefenseHUDWidget::ShowPlacementFeedback(const FText& Message, FLinearColor Color)
+{
+	if (!PlacementFeedbackText)
+	{
+		return;
+	}
+
+	PlacementFeedbackText->SetText(Message);
+	PlacementFeedbackText->SetColorAndOpacity(FSlateColor(Color));
+	PlacementFeedbackText->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PlacementFeedbackTimerHandle);
+		World->GetTimerManager().SetTimer(PlacementFeedbackTimerHandle, this, &ThisClass::ClearPlacementFeedback, 2.2f, false);
+	}
+}
+
+void UTowerDefenseHUDWidget::ClearPlacementFeedback()
+{
+	if (PlacementFeedbackText)
+	{
+		PlacementFeedbackText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 

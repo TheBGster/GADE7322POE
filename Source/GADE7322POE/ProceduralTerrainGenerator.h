@@ -12,10 +12,7 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class USceneComponent;
 
-/**
- * Builds a random grid-based terrain at runtime using instanced static meshes.
- * Stage 4 adds edge-to-centre paths, spawn locations, and defender placement data.
- */
+
 UCLASS()
 class GADE7322POE_API AProceduralTerrainGenerator : public AActor
 {
@@ -79,6 +76,12 @@ protected:
 	void BuildTileInstances();
 	void ApplyTileMaterials();
 	void DrawPathDebug() const;
+	void DrawPlacementDebug() const;
+
+	FIntPoint GetPathDirection(const TArray<FIntPoint>& Points, int32 Index) const;
+	bool TryAcceptPlacementCell(const FIntPoint& Candidate, TArray<FIntPoint>& ChosenPoints);
+	bool IsTooCloseForPad(const FIntPoint& Candidate, const TArray<FIntPoint>& Existing) const;
+	void RecordRejectedPlacement(const FIntPoint& Candidate);
 
 	void ConfigureInstancer(UHierarchicalInstancedStaticMeshComponent* Instancer, UStaticMesh* Mesh) const;
 	UMaterialInterface* GetSourceTileMaterial() const;
@@ -168,6 +171,42 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "1", ClampMax = "8"))
 	int32 PlacementMinSpacing;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "1", ClampMax = "8"))
+	int32 PadSpacingTiles;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "1", ClampMax = "4"))
+	int32 MinTilesFromPath;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "1", ClampMax = "5"))
+	int32 MaxTilesFromPath;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "1", ClampMax = "8"))
+	int32 MinPadSeparationTiles;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "1", ClampMax = "16"))
+	int32 MaxPadsPerPathway;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "0", ClampMax = "8"))
+	int32 PathStartSkipCells;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "0", ClampMax = "8"))
+	int32 PathEndSkipCells;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float LeftSideChance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float RightSideChance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float PadSkipChance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement")
+	bool bAllowBothSidesAtSameSample;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Placement")
+	bool bDrawDebugPlacementPads;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Mesh")
 	TObjectPtr<UStaticMesh> GroundTileMesh;
 
@@ -204,6 +243,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Terrain|Placement")
 	TArray<FVector> DefenderPlacementLocations;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Terrain|Placement")
+	TArray<FVector> RejectedPlacementLocations;
 
 	FRandomStream RandomStream;
 	FVector2D NoiseOrigin;

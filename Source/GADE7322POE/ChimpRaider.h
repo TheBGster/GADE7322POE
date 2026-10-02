@@ -6,9 +6,7 @@
 #include "EnemyBase.h"
 #include "ChimpRaider.generated.h"
 
-/**
- * Fast raider. Sprints past defenders to the tower and bursts speed when hit.
- */
+
 UCLASS()
 class GADE7322POE_API AChimpRaider : public AEnemyBase
 {

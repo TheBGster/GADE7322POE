@@ -20,10 +20,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewResou
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTowerHealthChanged, float, CurrentHealth, float, MaxHealth);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaveChanged, int32, NewWave, int32, EnemiesInWave);
 
-/**
- * Shared match data for the tower defence game.
- * Holds player resources, mirrored tower health, and the current match state.
- */
+
 UCLASS()
 class GADE7322POE_API ATowerDefenseGameState : public AGameStateBase
 {

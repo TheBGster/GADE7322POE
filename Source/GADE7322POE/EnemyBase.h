@@ -22,10 +22,7 @@ enum class EEnemyBehaviorState : uint8
 	Dead UMETA(DisplayName = "Dead")
 };
 
-/**
- * Base enemy that follows a generated waypoint path and attacks the tower (and later defenders).
- * Movement uses AddActorWorldOffset so it works on runtime-generated terrain without a NavMesh.
- */
+
 UCLASS()
 class GADE7322POE_API AEnemyBase : public AActor
 {

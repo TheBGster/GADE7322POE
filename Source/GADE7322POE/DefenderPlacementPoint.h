@@ -12,10 +12,7 @@ class UMaterialInstanceDynamic;
 class ADefenderBase;
 class UStaticMeshComponent;
 
-/**
- * Predetermined, clickable slot generated from the terrain.
- * Only one defender can occupy a point, and points are never created on enemy paths.
- */
+
 UCLASS()
 class GADE7322POE_API ADefenderPlacementPoint : public AActor
 {

@@ -6,12 +6,15 @@
 #include "DefenderBase.h"
 #include "DefenderPlacementPoint.h"
 #include "DefenderPlacementPreview.h"
+#include "Engine/EngineTypes.h"
 #include "EngineUtils.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/DamageType.h"
 #include "HealthComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "TowerDefenseGameState.h"
+#include "TowerDefenseHUD.h"
+#include "TowerDefenseHUDWidget.h"
 #include "VineTrap.h"
 
 ATowerDefensePlayerController::ATowerDefensePlayerController()
@@ -23,8 +26,11 @@ ATowerDefensePlayerController::ATowerDefensePlayerController()
 	DebugDamageAmount = 25.0f;
 	bApplyDebugDamageOnSelect = false;
 	bHasActiveSelection = false;
+	bIsPauseMenuOpen = false;
+	SetTickableWhenPaused(true);
 	SelectedDefenderKind = EDefenderKind::JungleScout;
 	SelectedDefenderClass = ADefenderBase::StaticClass();
+	PlacementSnapRadius = 180.0f;
 	BuildDefaultCatalog();
 }
 
@@ -97,7 +103,8 @@ void ATowerDefensePlayerController::SetupInputComponent()
 	{
 		InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ThisClass::HandleSelectPressed);
 		InputComponent->BindKey(EKeys::RightMouseButton, IE_Pressed, this, &ThisClass::HandleCancelPressed);
-		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ThisClass::HandleCancelPressed);
+		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ThisClass::HandlePausePressed);
+		InputComponent->BindKey(EKeys::P, IE_Pressed, this, &ThisClass::HandlePausePressed);
 		InputComponent->BindKey(EKeys::One, IE_Pressed, this, &ThisClass::SelectJungleScout);
 		InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &ThisClass::SelectBananaCannon);
 		InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &ThisClass::SelectVineTrap);
@@ -131,6 +138,11 @@ void ATowerDefensePlayerController::SelectVineTrap()
 
 void ATowerDefensePlayerController::HandleDefenderCardClicked(EDefenderKind Kind)
 {
+	if (bIsPauseMenuOpen)
+	{
+		return;
+	}
+
 	if (bHasActiveSelection && SelectedDefenderKind == Kind)
 	{
 		ClearDefenderSelection();
@@ -142,6 +154,11 @@ void ATowerDefensePlayerController::HandleDefenderCardClicked(EDefenderKind Kind
 
 void ATowerDefensePlayerController::SelectDefenderKind(EDefenderKind Kind)
 {
+	if (bIsPauseMenuOpen)
+	{
+		return;
+	}
+
 	ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
 	if (GameState && !GameState->CanAffordDefenderKind(Kind))
 	{
@@ -176,12 +193,69 @@ void ATowerDefensePlayerController::ClearDefenderSelection()
 
 void ATowerDefensePlayerController::HandleCancelPressed()
 {
-	if (IsCursorOverInteractiveWidget() && !IsInputKeyDown(EKeys::Escape))
+	if (bIsPauseMenuOpen || IsCursorOverInteractiveWidget())
 	{
 		return;
 	}
 
 	ClearDefenderSelection();
+}
+
+void ATowerDefensePlayerController::HandlePausePressed()
+{
+	TogglePauseMenu();
+}
+
+void ATowerDefensePlayerController::TogglePauseMenu()
+{
+	if (bIsPauseMenuOpen)
+	{
+		ResumeGame();
+	}
+	else
+	{
+		PauseGame();
+	}
+}
+
+void ATowerDefensePlayerController::PauseGame()
+{
+	const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
+	if (GameState && GameState->GetMatchState() == ETowerDefenseMatchState::GameOver)
+	{
+		return;
+	}
+
+	if (bIsPauseMenuOpen)
+	{
+		return;
+	}
+
+	ClearDefenderSelection();
+	bIsPauseMenuOpen = true;
+	SetPause(true);
+	UGameplayStatics::SetGamePaused(this, true);
+
+	if (ATowerDefenseHUD* HUD = GetHUD<ATowerDefenseHUD>())
+	{
+		HUD->ShowPauseMenu();
+	}
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Game paused."));
+}
+
+void ATowerDefensePlayerController::ResumeGame()
+{
+	bIsPauseMenuOpen = false;
+	SetPause(false);
+	UGameplayStatics::SetGamePaused(this, false);
+
+	if (ATowerDefenseHUD* HUD = GetHUD<ATowerDefenseHUD>())
+	{
+		HUD->HidePauseMenu();
+	}
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Game resumed."));
 }
 
 void ATowerDefensePlayerController::HandleResourcesChanged(int32 NewResourceAmount)
@@ -199,6 +273,11 @@ void ATowerDefensePlayerController::HandleMatchStateChanged(ETowerDefenseMatchSt
 	if (NewState != ETowerDefenseMatchState::InProgress)
 	{
 		ClearDefenderSelection();
+	}
+
+	if (NewState == ETowerDefenseMatchState::GameOver && bIsPauseMenuOpen)
+	{
+		ResumeGame();
 	}
 }
 
@@ -292,45 +371,48 @@ bool ATowerDefensePlayerController::CanAffordSelected() const
 
 void ATowerDefensePlayerController::HandleSelectPressed()
 {
-	if (IsCursorOverInteractiveWidget())
+	if (bIsPauseMenuOpen || IsCursorOverInteractiveWidget())
 	{
 		return;
 	}
 
 	if (!bHasActiveSelection)
 	{
+		ShowPlacementFeedback(
+			NSLOCTEXT("TowerDefense", "SelectDefenderFirst", "Select a defender from the bar first."),
+			FLinearColor(0.98f, 0.82f, 0.28f));
 		return;
 	}
 
-	FHitResult HitResult;
-	if (!GetSelectionHit(HitResult))
-	{
-		UE_LOG(LogTowerDefense, Verbose, TEXT("Select pressed, no world hit."));
-		return;
-	}
-
-	AActor* HitActor = HitResult.GetActor();
-	UE_LOG(LogTowerDefense, Log, TEXT("Select hit '%s' at %s"),
-		*GetNameSafe(HitActor),
-		*HitResult.ImpactPoint.ToCompactString());
-
-	if (ADefenderPlacementPoint* PlacementPoint = Cast<ADefenderPlacementPoint>(HitActor))
+	if (ADefenderPlacementPoint* PlacementPoint = FindPlacementPointUnderCursor())
 	{
 		TryPlaceDefender(PlacementPoint);
 		return;
 	}
 
-	if (!bApplyDebugDamageOnSelect || !HitActor)
+	FHitResult HitResult;
+	if (GetSelectionHit(HitResult))
+	{
+		UE_LOG(LogTowerDefense, Log, TEXT("Select hit '%s' at %s"),
+			*GetNameSafe(HitResult.GetActor()),
+			*HitResult.ImpactPoint.ToCompactString());
+	}
+
+	ShowPlacementFeedback(
+		NSLOCTEXT("TowerDefense", "ClickAPad", "Click a placement pad to build."),
+		FLinearColor(0.95f, 0.70f, 0.25f));
+
+	if (!bApplyDebugDamageOnSelect || !HitResult.GetActor())
 	{
 		return;
 	}
 
-	if (!HitActor->FindComponentByClass<UHealthComponent>())
+	if (!HitResult.GetActor()->FindComponentByClass<UHealthComponent>())
 	{
 		return;
 	}
 
-	UGameplayStatics::ApplyDamage(HitActor, DebugDamageAmount, this, this, UDamageType::StaticClass());
+	UGameplayStatics::ApplyDamage(HitResult.GetActor(), DebugDamageAmount, this, this, UDamageType::StaticClass());
 }
 
 void ATowerDefensePlayerController::TryPlaceDefender(ADefenderPlacementPoint* PlacementPoint)
@@ -350,22 +432,39 @@ void ATowerDefensePlayerController::TryPlaceDefender(ADefenderPlacementPoint* Pl
 	if (!PlacementPoint->CanPlaceDefender())
 	{
 		UE_LOG(LogTowerDefense, Warning, TEXT("That placement point is already occupied."));
+		ShowPlacementFeedback(
+			NSLOCTEXT("TowerDefense", "PadOccupied", "That pad already has a defender."),
+			FLinearColor(0.95f, 0.35f, 0.28f));
 		return;
 	}
 
 	ResolveSelectedClass();
 	const int32 Cost = GameState->GetDefenderCostForKind(SelectedDefenderKind);
+	const FText PlacedName = GetSelectedDefenderDisplayName();
 	if (!GameState->SpendResources(Cost))
 	{
 		UE_LOG(LogTowerDefense, Warning, TEXT("Cannot afford %s. Cost: %d  Current resources: %d"),
 			*GetSelectedDefenderDisplayName().ToString(), Cost, GameState->GetCurrentResources());
+		ShowPlacementFeedback(
+			FText::Format(NSLOCTEXT("TowerDefense", "CannotAffordPlace", "Need {0} coins for {1}."),
+				FText::AsNumber(Cost), GetSelectedDefenderDisplayName()),
+			FLinearColor(0.95f, 0.35f, 0.28f));
 		return;
 	}
 
 	if (!PlacementPoint->PlaceDefenderOfClass(SelectedDefenderClass))
 	{
 		GameState->AddResources(Cost);
+		ShowPlacementFeedback(
+			NSLOCTEXT("TowerDefense", "PlaceFailed", "Could not place that defender."),
+			FLinearColor(0.95f, 0.35f, 0.28f));
+		return;
 	}
+
+	ShowPlacementFeedback(
+		FText::Format(NSLOCTEXT("TowerDefense", "PlacedDefender", "Placed {0}  (-{1})"),
+			PlacedName, FText::AsNumber(Cost)),
+		FLinearColor(0.35f, 0.90f, 0.40f));
 }
 
 void ATowerDefensePlayerController::EnsurePlacementPreview()
@@ -421,12 +520,7 @@ void ATowerDefensePlayerController::UpdatePlacementPreview()
 		return;
 	}
 
-	FHitResult HitResult;
-	ADefenderPlacementPoint* HoveredPad = nullptr;
-	if (GetSelectionHit(HitResult))
-	{
-		HoveredPad = Cast<ADefenderPlacementPoint>(HitResult.GetActor());
-	}
+	ADefenderPlacementPoint* HoveredPad = FindPlacementPointUnderCursor();
 
 	const bool bCanPlace = HoveredPad && HoveredPad->CanPlaceDefender() && CanAffordSelected();
 	if (HoveredPad)
@@ -486,7 +580,9 @@ void ATowerDefensePlayerController::ClearPadHighlights()
 		{
 			if (IsValid(*It))
 			{
-				It->SetPlacementHighlight(EPlacementPadHighlight::None);
+				It->SetPlacementHighlight(It->IsOccupied()
+					? EPlacementPadHighlight::Occupied
+					: EPlacementPadHighlight::None);
 			}
 		}
 	}
@@ -535,13 +631,81 @@ bool ATowerDefensePlayerController::IsCursorOverInteractiveWidget() const
 			return true;
 		}
 
-		if (TypeName == TEXT("SButton") || TypeName == TEXT("SBorder") || TypeName == TEXT("SBox"))
+		if (TypeName == TEXT("SButton"))
 		{
 			return true;
 		}
 	}
 
 	return false;
+}
+
+ADefenderPlacementPoint* ATowerDefensePlayerController::FindPlacementPointUnderCursor() const
+{
+	TArray<TEnumAsByte<EObjectTypeQuery>> DynamicTypes;
+	DynamicTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
+
+	FHitResult DynamicHit;
+	if (GetHitResultUnderCursorForObjects(DynamicTypes, false, DynamicHit))
+	{
+		if (ADefenderPlacementPoint* Pad = Cast<ADefenderPlacementPoint>(DynamicHit.GetActor()))
+		{
+			return Pad;
+		}
+	}
+
+	FHitResult VisibilityHit;
+	if (GetHitResultUnderCursor(ECC_Visibility, false, VisibilityHit))
+	{
+		if (ADefenderPlacementPoint* Pad = Cast<ADefenderPlacementPoint>(VisibilityHit.GetActor()))
+		{
+			return Pad;
+		}
+
+		return FindNearestPlacementPoint(VisibilityHit.ImpactPoint);
+	}
+
+	return nullptr;
+}
+
+ADefenderPlacementPoint* ATowerDefensePlayerController::FindNearestPlacementPoint(const FVector& WorldLocation) const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	ADefenderPlacementPoint* BestPad = nullptr;
+	float BestDistSq = FMath::Square(PlacementSnapRadius);
+	for (TActorIterator<ADefenderPlacementPoint> It(World); It; ++It)
+	{
+		ADefenderPlacementPoint* Pad = *It;
+		if (!IsValid(Pad))
+		{
+			continue;
+		}
+
+		const float DistSq = FVector::DistSquared2D(WorldLocation, Pad->GetPlacementLocation());
+		if (DistSq < BestDistSq)
+		{
+			BestDistSq = DistSq;
+			BestPad = Pad;
+		}
+	}
+
+	return BestPad;
+}
+
+void ATowerDefensePlayerController::ShowPlacementFeedback(const FText& Message, const FLinearColor& Color)
+{
+	if (const ATowerDefenseHUD* HUD = GetHUD<ATowerDefenseHUD>())
+	{
+		if (UTowerDefenseHUDWidget* Widget = HUD->GetHUDWidget())
+		{
+			Widget->ShowPlacementFeedback(Message, Color);
+		}
+	}
 }
 
 bool ATowerDefensePlayerController::GetSelectionHit(FHitResult& OutHit) const

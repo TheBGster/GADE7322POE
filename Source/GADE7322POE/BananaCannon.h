@@ -8,9 +8,7 @@
 
 class ABananaProjectile;
 
-/**
- * Long-range, slow, high-damage cannon that prefers high-health enemies.
- */
+
 UCLASS()
 class GADE7322POE_API ABananaCannon : public ADefenderBase
 {

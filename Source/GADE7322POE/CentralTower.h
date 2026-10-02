@@ -13,10 +13,7 @@ class USphereComponent;
 class UStaticMeshComponent;
 class USceneComponent;
 
-/**
- * Central structure the player must defend.
- * Uses UHealthComponent for damage/death and a timer (not Tick) for automatic attacks.
- */
+
 UCLASS()
 class GADE7322POE_API ACentralTower : public AActor
 {

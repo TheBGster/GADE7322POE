@@ -12,10 +12,7 @@ class ACentralTower;
 class AEnemySpawner;
 class ADefenderPlacementPoint;
 
-/**
- * Owns the tower defence match flow: start, game over, and restart.
- * Spawns terrain, the central tower, placement pads, and the enemy spawner each match.
- */
+
 UCLASS()
 class GADE7322POE_API ATowerDefenseGameMode : public AGameModeBase
 {

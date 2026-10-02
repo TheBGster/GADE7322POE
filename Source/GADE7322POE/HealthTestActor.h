@@ -9,10 +9,7 @@
 class UHealthComponent;
 class UStaticMeshComponent;
 
-/**
- * Temporary Stage 2 test actor. Place it in the level, then left-click it to apply damage.
- * This class is only for verifying the health component. Later stages replace it with the tower, enemies, and defenders.
- */
+
 UCLASS()
 class GADE7322POE_API AHealthTestActor : public AActor
 {

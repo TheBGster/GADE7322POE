@@ -9,12 +9,9 @@
 
 class UTowerDefenseHUDWidget;
 class UGameOverWidget;
+class UPauseMenuWidget;
 
-/**
- * Creates and owns the HUD and Game Over widgets.
- * Assign Blueprint widget classes (WBP_HUD / WBP_GameOver) to restyle;
- * the C++ widget classes are used if none are assigned.
- */
+
 UCLASS()
 class GADE7322POE_API ATowerDefenseHUD : public AHUD
 {
@@ -22,6 +19,18 @@ class GADE7322POE_API ATowerDefenseHUD : public AHUD
 
 public:
 	ATowerDefenseHUD();
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|UI")
+	UTowerDefenseHUDWidget* GetHUDWidget() const { return HUDWidget; }
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
+	void ShowPauseMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
+	void HidePauseMenu();
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|UI")
+	bool IsPauseMenuVisible() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -36,11 +45,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
 	TSubclassOf<UGameOverWidget> GameOverWidgetClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
+	TSubclassOf<UPauseMenuWidget> PauseMenuWidgetClass;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
 	TObjectPtr<UTowerDefenseHUDWidget> HUDWidget;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
 	TObjectPtr<UGameOverWidget> GameOverWidget;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
+	TObjectPtr<UPauseMenuWidget> PauseMenuWidget;
 
 	void CreateWidgets();
 	void RemoveWidgets();
@@ -49,6 +64,7 @@ protected:
 	void ApplyMatchState(ETowerDefenseMatchState NewState);
 	void SetGameplayInputMode();
 	void SetGameOverInputMode();
+	void SetPauseInputMode();
 
 	TWeakObjectPtr<ATowerDefenseGameState> BoundGameState;
 };

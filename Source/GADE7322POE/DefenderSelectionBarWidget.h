@@ -14,7 +14,7 @@ class UDefenderSelectCardWidget;
 class ATowerDefenseGameState;
 class ATowerDefensePlayerController;
 
-/** Bottom-of-screen defender picker, wave, and coin display. */
+
 UCLASS()
 class GADE7322POE_API UDefenderSelectionBarWidget : public UUserWidget
 {

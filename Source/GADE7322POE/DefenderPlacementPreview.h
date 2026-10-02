@@ -11,7 +11,7 @@ class UStaticMeshComponent;
 class USceneComponent;
 class UMaterialInstanceDynamic;
 
-/** Ghost mesh shown while a defender is selected for placement. */
+
 UCLASS()
 class GADE7322POE_API ADefenderPlacementPreview : public AActor
 {

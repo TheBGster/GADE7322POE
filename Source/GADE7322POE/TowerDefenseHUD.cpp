@@ -2,6 +2,7 @@
 
 #include "TowerDefenseHUD.h"
 #include "GameOverWidget.h"
+#include "PauseMenuWidget.h"
 #include "TowerDefenseHUDWidget.h"
 #include "GADE7322POE.h"
 #include "Blueprint/UserWidget.h"
@@ -12,6 +13,7 @@ ATowerDefenseHUD::ATowerDefenseHUD()
 	PrimaryActorTick.bCanEverTick = false;
 	HUDWidgetClass = UTowerDefenseHUDWidget::StaticClass();
 	GameOverWidgetClass = UGameOverWidget::StaticClass();
+	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
 }
 
 void ATowerDefenseHUD::BeginPlay()
@@ -63,6 +65,15 @@ void ATowerDefenseHUD::CreateWidgets()
 		GameOverWidget->HideGameOver();
 		UE_LOG(LogTowerDefense, Log, TEXT("Game Over widget added to viewport."));
 	}
+
+	UClass* PauseClassToUse = PauseMenuWidgetClass ? PauseMenuWidgetClass.Get() : UPauseMenuWidget::StaticClass();
+	PauseMenuWidget = CreateWidget<UPauseMenuWidget>(PlayerController, PauseClassToUse);
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->AddToViewport(8);
+		PauseMenuWidget->HidePauseMenu();
+		UE_LOG(LogTowerDefense, Log, TEXT("Pause menu widget added to viewport."));
+	}
 }
 
 void ATowerDefenseHUD::RemoveWidgets()
@@ -77,6 +88,12 @@ void ATowerDefenseHUD::RemoveWidgets()
 	{
 		GameOverWidget->RemoveFromParent();
 		GameOverWidget = nullptr;
+	}
+
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->RemoveFromParent();
+		PauseMenuWidget = nullptr;
 	}
 }
 
@@ -118,6 +135,8 @@ void ATowerDefenseHUD::ApplyMatchState(ETowerDefenseMatchState NewState)
 {
 	if (NewState == ETowerDefenseMatchState::GameOver)
 	{
+		HidePauseMenu();
+
 		if (GameOverWidget)
 		{
 			GameOverWidget->ShowGameOver();
@@ -164,6 +183,60 @@ void ATowerDefenseHUD::SetGameOverInputMode()
 	if (GameOverWidget)
 	{
 		InputMode.SetWidgetToFocus(GameOverWidget->TakeWidget());
+	}
+
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->bShowMouseCursor = true;
+}
+
+void ATowerDefenseHUD::ShowPauseMenu()
+{
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->ShowPauseMenu();
+	}
+
+	SetPauseInputMode();
+}
+
+void ATowerDefenseHUD::HidePauseMenu()
+{
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->HidePauseMenu();
+	}
+
+	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	{
+		if (GameState->GetMatchState() == ETowerDefenseMatchState::GameOver)
+		{
+			SetGameOverInputMode();
+			return;
+		}
+	}
+
+	SetGameplayInputMode();
+}
+
+bool ATowerDefenseHUD::IsPauseMenuVisible() const
+{
+	return PauseMenuWidget && PauseMenuWidget->IsPauseMenuVisible();
+}
+
+void ATowerDefenseHUD::SetPauseInputMode()
+{
+	APlayerController* PlayerController = GetOwningPlayerController();
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	if (PauseMenuWidget)
+	{
+		InputMode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
 	}
 
 	PlayerController->SetInputMode(InputMode);

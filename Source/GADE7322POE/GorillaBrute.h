@@ -6,9 +6,7 @@
 #include "EnemyBase.h"
 #include "GorillaBrute.generated.h"
 
-/**
- * Slow tank enemy. Keeps walking while swinging so it cannot be stalled by pads.
- */
+
 UCLASS()
 class GADE7322POE_API AGorillaBrute : public AEnemyBase
 {

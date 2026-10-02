@@ -13,7 +13,7 @@ class UImage;
 class UTextBlock;
 class ATowerDefensePlayerController;
 
-/** One selectable defender card in the bottom selection bar. */
+
 UCLASS()
 class GADE7322POE_API UDefenderSelectCardWidget : public UUserWidget
 {

@@ -9,10 +9,7 @@
 
 class AEnemyBase;
 
-/**
- * Spawns enemies on generated paths using timed waves. Does not Tick.
- * Wave composition is chosen from the current match state rather than a fixed list.
- */
+
 UCLASS()
 class GADE7322POE_API AEnemySpawner : public AActor
 {

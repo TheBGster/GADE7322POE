@@ -10,7 +10,7 @@ class UHealthComponent;
 class UProgressBar;
 class UTextBlock;
 
-/** Small floating name + health bar for enemies and defenders. */
+
 UCLASS()
 class GADE7322POE_API UCombatStatusWidget : public UUserWidget
 {

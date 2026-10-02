@@ -10,10 +10,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, CurrentHea
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnDamaged, float, DamageAmount, AActor*, DamageCauser, AController*, InstigatedBy);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDeath, AActor*, DeadActor);
 
-/**
- * Reusable health, damage, and death handling for the tower, enemies, and defenders.
- * Listens to Unreal's actor damage events so UGameplayStatics::ApplyDamage() works automatically.
- */
+
 UCLASS(ClassGroup = (TowerDefense), meta = (BlueprintSpawnableComponent))
 class GADE7322POE_API UHealthComponent : public UActorComponent
 {

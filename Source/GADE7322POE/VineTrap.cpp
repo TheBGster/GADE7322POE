@@ -16,7 +16,7 @@ AVineTrap::AVineTrap()
 {
 	DefenderKind = EDefenderKind::VineTrap;
 	DisplayName = FText::FromString(TEXT("Vine Trap"));
-	BodyColor = FLinearColor(0.08f, 0.42f, 0.12f, 1.0f);
+	BodyColor = FLinearColor(0.18f, 0.72f, 0.22f, 1.0f);
 	MaxHealth = 90.0f;
 	AttackRange = 360.0f;
 	AttackDamage = 0.0f;

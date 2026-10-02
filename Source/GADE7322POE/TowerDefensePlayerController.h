@@ -14,10 +14,7 @@ class ADefenderPlacementPreview;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSelectedDefenderChanged, EDefenderKind, Kind, int32, Cost);
 
-/**
- * Handles player input for the tower defence game.
- * The selection bar or keys 1/2/3 choose a defender. Left-click a pad to place it.
- */
+
 UCLASS()
 class GADE7322POE_API ATowerDefensePlayerController : public APlayerController
 {
@@ -56,6 +53,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Placement")
 	void ClearDefenderSelection();
 
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Pause")
+	void TogglePauseMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Pause")
+	void PauseGame();
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Pause")
+	void ResumeGame();
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Pause")
+	bool IsGamePausedMenu() const { return bIsPauseMenuOpen; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -67,6 +76,9 @@ protected:
 
 	UFUNCTION()
 	void HandleCancelPressed();
+
+	UFUNCTION()
+	void HandlePausePressed();
 
 	UFUNCTION()
 	void SelectJungleScout();
@@ -85,7 +97,10 @@ protected:
 
 	bool GetSelectionHit(FHitResult& OutHit) const;
 	bool IsCursorOverInteractiveWidget() const;
+	ADefenderPlacementPoint* FindPlacementPointUnderCursor() const;
+	ADefenderPlacementPoint* FindNearestPlacementPoint(const FVector& WorldLocation) const;
 	void TryPlaceDefender(ADefenderPlacementPoint* PlacementPoint);
+	void ShowPlacementFeedback(const FText& Message, const FLinearColor& Color);
 	void ResolveSelectedClass();
 	void BuildDefaultCatalog();
 	void EnsurePlacementPreview();
@@ -108,8 +123,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Placement")
 	bool bHasActiveSelection;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Pause")
+	bool bIsPauseMenuOpen;
+
 	UPROPERTY()
 	TObjectPtr<ADefenderPlacementPreview> PlacementPreview;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Placement", meta = (ClampMin = "50.0"))
+	float PlacementSnapRadius;
 
 	/** Debug: left-clicking an actor with a Health Component applies this damage. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Debug", meta = (ClampMin = "0.0"))

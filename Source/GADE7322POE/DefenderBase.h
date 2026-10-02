@@ -15,10 +15,7 @@ class UWidgetComponent;
 class UMaterialInstanceDynamic;
 class ADefenderPlacementPoint;
 
-/**
- * Placeable defender that automatically attacks enemies in range.
- * Combat uses a timer, not Tick.
- */
+
 UCLASS()
 class GADE7322POE_API ADefenderBase : public AActor
 {

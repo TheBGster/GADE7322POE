@@ -95,7 +95,8 @@ enum class EPlacementPadHighlight : uint8
 	None UMETA(DisplayName = "None"),
 	Available UMETA(DisplayName = "Available"),
 	ValidHover UMETA(DisplayName = "Valid Hover"),
-	Invalid UMETA(DisplayName = "Invalid")
+	Invalid UMETA(DisplayName = "Invalid"),
+	Occupied UMETA(DisplayName = "Occupied")
 };
 
 USTRUCT(BlueprintType)

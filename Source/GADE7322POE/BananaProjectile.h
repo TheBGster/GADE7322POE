@@ -9,8 +9,7 @@
 class UStaticMeshComponent;
 class USceneComponent;
 
-/** Simple homing banana used by the Banana Cannon. */
-UCLASS()
+
 class GADE7322POE_API ABananaProjectile : public AActor
 {
 	GENERATED_BODY()

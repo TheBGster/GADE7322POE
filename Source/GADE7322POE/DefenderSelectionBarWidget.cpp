@@ -27,7 +27,7 @@ TSharedRef<SWidget> UDefenderSelectionBarWidget::RebuildWidget()
 void UDefenderSelectionBarWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	SetVisibility(ESlateVisibility::Visible);
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	BindDelegates();
 	BuildCards();
 	RefreshBar();
@@ -44,7 +44,7 @@ void UDefenderSelectionBarWidget::BuildDefaultLayout()
 	BarBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BarBorder"));
 	BarBorder->SetBrushColor(FLinearColor(0.10f, 0.07f, 0.03f, 0.92f));
 	BarBorder->SetPadding(FMargin(18.0f, 10.0f, 18.0f, 12.0f));
-	BarBorder->SetVisibility(ESlateVisibility::Visible);
+	BarBorder->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	WidgetTree->RootWidget = BarBorder;
 
 	UHorizontalBox* RootRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("RootRow"));
@@ -61,12 +61,14 @@ void UDefenderSelectionBarWidget::BuildDefaultLayout()
 	WaveLabel->SetFont(FCoreStyle::GetDefaultFontStyle("Bold", 16));
 	WaveLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.78f, 0.92f, 0.62f)));
 	WaveLabel->SetText(NSLOCTEXT("TowerDefense", "BarWaveWaiting", "WAVE --"));
+	WaveLabel->SetVisibility(ESlateVisibility::HitTestInvisible);
 	StatusBox->AddChildToVerticalBox(WaveLabel);
 
 	CoinsLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CoinsLabel"));
 	CoinsLabel->SetFont(FCoreStyle::GetDefaultFontStyle("Bold", 18));
 	CoinsLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.98f, 0.86f, 0.28f)));
 	CoinsLabel->SetText(NSLOCTEXT("TowerDefense", "BarCoins", "COINS: --"));
+	CoinsLabel->SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (UVerticalBoxSlot* CoinSlot = StatusBox->AddChildToVerticalBox(CoinsLabel))
 	{
 		CoinSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 0.0f));

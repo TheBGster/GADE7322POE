@@ -13,12 +13,7 @@ class UDefenderSelectionBarWidget;
 class ATowerDefenseGameState;
 class ATowerDefensePlayerController;
 
-/**
- * In-game HUD: tower health, resources, defender cost, and placement help.
- * Works as a C++ widget immediately. Optional Blueprint child (WBP_HUD) can restyle it
- * by using these widget names: TowerHealthText, TowerHealthBar, ResourcesText,
- * DefenderCostText, InstructionsText.
- */
+
 UCLASS()
 class GADE7322POE_API UTowerDefenseHUDWidget : public UUserWidget
 {
@@ -27,6 +22,9 @@ class GADE7322POE_API UTowerDefenseHUDWidget : public UUserWidget
 public:
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
 	void RefreshFromGameState();
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
+	void ShowPlacementFeedback(const FText& Message, FLinearColor Color);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -72,6 +70,9 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UDefenderSelectionBarWidget> SelectionBar;
 
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UTextBlock> PlacementFeedbackText;
+
 	void BuildDefaultLayout();
 	void BindToGameState();
 	void UnbindFromGameState();
@@ -83,7 +84,10 @@ protected:
 	void UpdateSelectedDefenderDisplay();
 	ATowerDefenseGameState* GetTowerDefenseGameState() const;
 
+	void ClearPlacementFeedback();
+
 	TWeakObjectPtr<ATowerDefenseGameState> BoundGameState;
 	TWeakObjectPtr<ATowerDefensePlayerController> BoundPlayerController;
 	int32 LastEnemiesInWave = 0;
+	FTimerHandle PlacementFeedbackTimerHandle;
 };

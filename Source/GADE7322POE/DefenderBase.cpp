@@ -29,7 +29,7 @@ ADefenderBase::ADefenderBase()
 	PlacementCost = 25;
 	DefenderKind = EDefenderKind::JungleScout;
 	DisplayName = FText::FromString(TEXT("Jungle Scout"));
-	BodyColor = FLinearColor(0.32f, 0.42f, 0.22f, 1.0f);
+	BodyColor = FLinearColor(0.62f, 0.48f, 0.16f, 1.0f);
 
 	Tags.Add(TowerDefenseTags::Defender);
 

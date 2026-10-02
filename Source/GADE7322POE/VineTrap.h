@@ -8,9 +8,7 @@
 
 class UStaticMeshComponent;
 
-/**
- * Crowd-control defender. Pulses a non-stacking slow onto enemies in range.
- */
+
 UCLASS()
 class GADE7322POE_API AVineTrap : public ADefenderBase
 {

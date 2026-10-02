@@ -30,8 +30,8 @@ ADefenderPlacementPoint::ADefenderPlacementPoint()
 		MeshComponent->SetStaticMesh(CylinderMesh.Object);
 	}
 
-	MeshComponent->SetRelativeScale3D(FVector(1.4f, 1.4f, 0.12f));
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 8.0f));
+	MeshComponent->SetRelativeScale3D(FVector(1.85f, 1.85f, 0.22f));
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 16.0f));
 }
 
 void ADefenderPlacementPoint::BeginPlay()
@@ -139,6 +139,9 @@ void ADefenderPlacementPoint::SetPlacementHighlight(EPlacementPadHighlight Highl
 	case EPlacementPadHighlight::Invalid:
 		Color = FLinearColor(0.72f, 0.16f, 0.12f, 1.0f);
 		break;
+	case EPlacementPadHighlight::Occupied:
+		Color = FLinearColor(0.12f, 0.07f, 0.03f, 1.0f);
+		break;
 	default:
 		break;
 	}
@@ -151,12 +154,10 @@ void ADefenderPlacementPoint::UpdateVisualState()
 {
 	if (MeshComponent)
 	{
-		MeshComponent->SetVisibility(!bIsOccupied);
-		MeshComponent->SetCollisionEnabled(bIsOccupied ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
+		MeshComponent->SetVisibility(true);
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		MeshComponent->SetRelativeScale3D(bIsOccupied ? FVector(1.65f, 1.65f, 0.16f) : FVector(1.85f, 1.85f, 0.22f));
 	}
 
-	if (bIsOccupied)
-	{
-		SetPlacementHighlight(EPlacementPadHighlight::None);
-	}
+	SetPlacementHighlight(bIsOccupied ? EPlacementPadHighlight::Occupied : EPlacementPadHighlight::None);
 }

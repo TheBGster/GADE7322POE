@@ -4,30 +4,34 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "GameOverWidget.generated.h"
+#include "PauseMenuWidget.generated.h"
 
 class UButton;
 class UTextBlock;
 
 
 UCLASS()
-class GADE7322POE_API UGameOverWidget : public UUserWidget
+class GADE7322POE_API UPauseMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
-	void RestartGame();
+	void ShowPauseMenu();
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
-	void ShowGameOver();
+	void HidePauseMenu();
 
-	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
-	void HideGameOver();
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|UI")
+	bool IsPauseMenuVisible() const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	UFUNCTION()
+	void HandleResumeClicked();
 
 	UFUNCTION()
 	void HandleRestartClicked();
@@ -36,7 +40,11 @@ protected:
 	TObjectPtr<UTextBlock> TitleText;
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UButton> ResumeButton;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UButton> RestartButton;
 
 	void BuildDefaultLayout();
+	UButton* MakeMenuButton(FName Name, const FText& Label, const FLinearColor& Color);
 };

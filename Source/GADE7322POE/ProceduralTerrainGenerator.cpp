@@ -42,8 +42,20 @@ AProceduralTerrainGenerator::AProceduralTerrainGenerator()
 	MinPathStartSeparation = 6;
 	SpawnHeightOffset = 50.0f;
 	bDrawDebugPaths = true;
-	MaxDefenderPlacementPoints = 16;
+	MaxDefenderPlacementPoints = 32;
 	PlacementMinSpacing = 2;
+	PadSpacingTiles = 2;
+	MinTilesFromPath = 1;
+	MaxTilesFromPath = 2;
+	MinPadSeparationTiles = 2;
+	MaxPadsPerPathway = 10;
+	PathStartSkipCells = 1;
+	PathEndSkipCells = 2;
+	LeftSideChance = 0.88f;
+	RightSideChance = 0.88f;
+	PadSkipChance = 0.08f;
+	bAllowBothSidesAtSameSample = true;
+	bDrawDebugPlacementPads = false;
 	NoiseOrigin = FVector2D::ZeroVector;
 	GroundColor = FLinearColor(0.10f, 0.50f, 0.10f, 1.0f);
 	PathColor = FLinearColor(0.35f, 0.15f, 0.05f, 1.0f);
@@ -105,6 +117,7 @@ void AProceduralTerrainGenerator::GenerateTerrain()
 	GenerateDefenderPlacementLocations();
 	BuildTileInstances();
 	DrawPathDebug();
+	DrawPlacementDebug();
 
 	UE_LOG(LogTowerDefense, Log, TEXT("Generated terrain %dx%d using seed %d. Paths: %d  Spawns: %d  Placement points: %d"),
 		GridWidth, GridHeight, RandomSeed, GeneratedPaths.Num(), SpawnLocations.Num(), DefenderPlacementLocations.Num());
@@ -137,6 +150,7 @@ void AProceduralTerrainGenerator::ClearPreviousTerrain()
 	GeneratedPaths.Reset();
 	SpawnLocations.Reset();
 	DefenderPlacementLocations.Reset();
+	RejectedPlacementLocations.Reset();
 }
 
 void AProceduralTerrainGenerator::GenerateGrid()
@@ -225,41 +239,167 @@ void AProceduralTerrainGenerator::GenerateEnemySpawnLocations()
 void AProceduralTerrainGenerator::GenerateDefenderPlacementLocations()
 {
 	DefenderPlacementLocations.Reset();
-
-	TArray<FIntPoint> Candidates;
-	for (const FTerrainTile& Tile : TerrainTiles)
-	{
-		if (IsValidDefenderPlacementTile(Tile))
-		{
-			Candidates.Add(Tile.GetGridPosition());
-		}
-	}
-
-	for (int32 Index = Candidates.Num() - 1; Index > 0; --Index)
-	{
-		const int32 SwapIndex = RandomStream.RandRange(0, Index);
-		Candidates.Swap(Index, SwapIndex);
-	}
+	RejectedPlacementLocations.Reset();
 
 	TArray<FIntPoint> ChosenPoints;
-	for (const FIntPoint& Candidate : Candidates)
-	{
-		if (ChosenPoints.Num() >= MaxDefenderPlacementPoints)
-		{
-			break;
-		}
+	const int32 Spacing = FMath::Max(PadSpacingTiles, 1);
+	const int32 MinOffset = FMath::Max(MinTilesFromPath, 1);
+	const int32 MaxOffset = FMath::Max(MaxTilesFromPath, MinOffset);
 
-		if (IsTooCloseToAny(Candidate, ChosenPoints, PlacementMinSpacing))
+	for (const FGeneratedPath& Path : GeneratedPaths)
+	{
+		if (Path.GridPoints.Num() < 3)
 		{
 			continue;
 		}
 
-		if (FTerrainTile* Tile = GetTile(Candidate.X, Candidate.Y))
+		int32 PadsOnThisPath = 0;
+		const int32 FirstIndex = FMath::Clamp(PathStartSkipCells, 1, Path.GridPoints.Num() - 2);
+		const int32 LastIndex = FMath::Max(FirstIndex, Path.GridPoints.Num() - FMath::Max(PathEndSkipCells, 1));
+
+		for (int32 Index = FirstIndex; Index < LastIndex && PadsOnThisPath < MaxPadsPerPathway; Index += Spacing)
 		{
-			Tile->TileType = ETerrainTileType::Placeable;
-			ChosenPoints.Add(Candidate);
-			DefenderPlacementLocations.Add(GetTileSurfaceLocation(Candidate.X, Candidate.Y));
+			if (ChosenPoints.Num() >= MaxDefenderPlacementPoints)
+			{
+				return;
+			}
+
+			if (RandomStream.FRand() < PadSkipChance)
+			{
+				continue;
+			}
+
+			const FIntPoint PathCell = Path.GridPoints[Index];
+			const FIntPoint Direction = GetPathDirection(Path.GridPoints, Index);
+			const FIntPoint Left(-Direction.Y, Direction.X);
+			const FIntPoint Right(Direction.Y, -Direction.X);
+
+			TArray<FIntPoint, TInlineAllocator<2>> Sides;
+			if (RandomStream.FRand() <= LeftSideChance)
+			{
+				Sides.Add(Left);
+			}
+			if (RandomStream.FRand() <= RightSideChance)
+			{
+				Sides.Add(Right);
+			}
+
+			if (Sides.Num() == 2 && RandomStream.FRand() < 0.5f)
+			{
+				Sides.Swap(0, 1);
+			}
+
+			int32 SidesPlaced = 0;
+			for (const FIntPoint& Side : Sides)
+			{
+				if (Side.X == 0 && Side.Y == 0)
+				{
+					continue;
+				}
+
+				bool bPlacedOnSide = false;
+				for (int32 Offset = MinOffset; Offset <= MaxOffset; ++Offset)
+				{
+					const FIntPoint Candidate(PathCell.X + Side.X * Offset, PathCell.Y + Side.Y * Offset);
+					if (TryAcceptPlacementCell(Candidate, ChosenPoints))
+					{
+						++PadsOnThisPath;
+						++SidesPlaced;
+						bPlacedOnSide = true;
+						break;
+					}
+
+					RecordRejectedPlacement(Candidate);
+				}
+
+				if (bPlacedOnSide && !bAllowBothSidesAtSameSample)
+				{
+					break;
+				}
+
+				if (SidesPlaced > 0 && !bAllowBothSidesAtSameSample)
+				{
+					break;
+				}
+			}
 		}
+	}
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Generated %d path-adjacent defender pads (%d rejected)."),
+		DefenderPlacementLocations.Num(), RejectedPlacementLocations.Num());
+}
+
+FIntPoint AProceduralTerrainGenerator::GetPathDirection(const TArray<FIntPoint>& Points, int32 Index) const
+{
+	FIntPoint Delta(1, 0);
+	if (Points.IsValidIndex(Index + 1))
+	{
+		Delta = Points[Index + 1] - Points[Index];
+	}
+	else if (Points.IsValidIndex(Index - 1))
+	{
+		Delta = Points[Index] - Points[Index - 1];
+	}
+
+	Delta.X = FMath::Sign(Delta.X);
+	Delta.Y = FMath::Sign(Delta.Y);
+	if (Delta.X == 0 && Delta.Y == 0)
+	{
+		Delta = FIntPoint(1, 0);
+	}
+
+	return Delta;
+}
+
+bool AProceduralTerrainGenerator::TryAcceptPlacementCell(const FIntPoint& Candidate, TArray<FIntPoint>& ChosenPoints)
+{
+	if (ChosenPoints.Num() >= MaxDefenderPlacementPoints)
+	{
+		return false;
+	}
+
+	FTerrainTile* Tile = GetTile(Candidate.X, Candidate.Y);
+	if (!Tile || !IsValidDefenderPlacementTile(*Tile))
+	{
+		return false;
+	}
+
+	if (IsTooCloseForPad(Candidate, ChosenPoints))
+	{
+		return false;
+	}
+
+	Tile->TileType = ETerrainTileType::Placeable;
+	ChosenPoints.Add(Candidate);
+	DefenderPlacementLocations.Add(GetTileSurfaceLocation(Candidate.X, Candidate.Y));
+	return true;
+}
+
+bool AProceduralTerrainGenerator::IsTooCloseForPad(const FIntPoint& Candidate, const TArray<FIntPoint>& Existing) const
+{
+	const int32 MinSeparation = FMath::Max(MinPadSeparationTiles, PlacementMinSpacing);
+	for (const FIntPoint& Other : Existing)
+	{
+		const int32 Chebyshev = FMath::Max(FMath::Abs(Candidate.X - Other.X), FMath::Abs(Candidate.Y - Other.Y));
+		if (Chebyshev < MinSeparation)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void AProceduralTerrainGenerator::RecordRejectedPlacement(const FIntPoint& Candidate)
+{
+	if (!bDrawDebugPlacementPads)
+	{
+		return;
+	}
+
+	if (IsValidCoordinate(Candidate.X, Candidate.Y))
+	{
+		RejectedPlacementLocations.Add(GetTileSurfaceLocation(Candidate.X, Candidate.Y));
 	}
 }
 
@@ -338,10 +478,42 @@ void AProceduralTerrainGenerator::DrawPathDebug() const
 	DrawDebugSphere(World, GetGridCenterWorldLocation() + FVector(0.0f, 0.0f, 80.0f), 50.0f, 12, FColor::Green, true, -1.0f, 0, 3.0f);
 	DrawDebugString(World, GetGridCenterWorldLocation() + FVector(0.0f, 0.0f, 140.0f),
 		TEXT("Tower"), nullptr, FColor::Green, 30.0f, true, 1.2f);
+}
 
+void AProceduralTerrainGenerator::DrawPlacementDebug() const
+{
+	if (!bDrawDebugPlacementPads)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const float ClearanceRadius = static_cast<float>(MinTilesFromPath) * TileSize * 0.45f;
+	for (const FGeneratedPath& Path : GeneratedPaths)
+	{
+		for (const FVector& Waypoint : Path.Waypoints)
+		{
+			DrawDebugCircle(World, Waypoint + FVector(0.0f, 0.0f, 12.0f), ClearanceRadius, 16,
+				FColor(40, 180, 255), true, -1.0f, 0, 2.0f, FVector(0.0f, 1.0f, 0.0f), FVector(1.0f, 0.0f, 0.0f), false);
+		}
+	}
+
+	for (const FVector& Rejected : RejectedPlacementLocations)
+	{
+		DrawDebugSphere(World, Rejected + FVector(0.0f, 0.0f, 18.0f), 16.0f, 8, FColor::Red, true, -1.0f, 0, 1.5f);
+	}
+
+	int32 PadIndex = 0;
 	for (const FVector& Placement : DefenderPlacementLocations)
 	{
-		DrawDebugBox(World, Placement + FVector(0.0f, 0.0f, 20.0f), FVector(35.0f, 35.0f, 20.0f), FColor::Yellow, true, -1.0f, 0, 2.0f);
+		DrawDebugBox(World, Placement + FVector(0.0f, 0.0f, 22.0f), FVector(40.0f, 40.0f, 22.0f), FColor::Emerald, true, -1.0f, 0, 2.5f);
+		DrawDebugString(World, Placement + FVector(0.0f, 0.0f, 70.0f),
+			FString::Printf(TEXT("Pad %d"), PadIndex++), nullptr, FColor::Emerald, 30.0f, true, 1.1f);
 	}
 }
 
@@ -717,7 +889,9 @@ FGeneratedPath AProceduralTerrainGenerator::BuildGeneratedPath(int32 PathID, con
 
 bool AProceduralTerrainGenerator::IsValidDefenderPlacementTile(const FTerrainTile& Tile) const
 {
-	if (Tile.TileType == ETerrainTileType::Path || Tile.TileType == ETerrainTileType::Tower)
+	if (Tile.TileType == ETerrainTileType::Path
+		|| Tile.TileType == ETerrainTileType::Tower
+		|| Tile.TileType == ETerrainTileType::Placeable)
 	{
 		return false;
 	}
