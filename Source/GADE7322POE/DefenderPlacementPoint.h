@@ -4,7 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "TowerDefenseTypes.h"
 #include "DefenderPlacementPoint.generated.h"
+
+class UMaterialInstanceDynamic;
 
 class ADefenderBase;
 class UStaticMeshComponent;
@@ -42,7 +45,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Placement")
 	bool IsOccupied() const { return bIsOccupied; }
 
+	UFUNCTION(BlueprintPure, Category = "Placement")
+	FVector GetPlacementLocation() const { return PlacementLocation; }
+
+	UFUNCTION(BlueprintCallable, Category = "Placement")
+	void SetPlacementHighlight(EPlacementPadHighlight Highlight);
+
 protected:
+	virtual void BeginPlay() override;
+
 	void UpdateVisualState();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Placement")
@@ -59,4 +70,9 @@ protected:
 
 	UPROPERTY()
 	TWeakObjectPtr<ADefenderBase> OccupyingDefender;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> PadMaterialInstance;
+
+	EPlacementPadHighlight CurrentHighlight;
 };

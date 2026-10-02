@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "TowerDefenseHUDWidget.h"
+#include "DefenderSelectionBarWidget.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefensePlayerController.h"
 #include "Blueprint/WidgetTree.h"
@@ -136,16 +137,24 @@ void UTowerDefenseHUDWidget::BuildDefaultLayout()
 	InstructionsText = MakeHUDText(
 		WidgetTree,
 		TEXT("InstructionsText"),
-		TEXT("1 Scout   2 Cannon   3 Vine Trap   |   Click a pad to place."),
-		16,
-		FLinearColor(0.92f, 0.92f, 0.92f));
+		TEXT("Choose a defender below, then click a pad. Esc / right-click cancels."),
+		15,
+		FLinearColor(0.92f, 0.90f, 0.80f));
 
 	if (UCanvasPanelSlot* InstructionSlot = RootCanvas->AddChildToCanvas(InstructionsText))
 	{
 		InstructionSlot->SetAnchors(FAnchors(0.5f, 1.0f, 0.5f, 1.0f));
 		InstructionSlot->SetAlignment(FVector2D(0.5f, 1.0f));
-		InstructionSlot->SetPosition(FVector2D(0.0f, -36.0f));
+		InstructionSlot->SetPosition(FVector2D(0.0f, -186.0f));
 		InstructionSlot->SetAutoSize(true);
+	}
+
+	SelectionBar = WidgetTree->ConstructWidget<UDefenderSelectionBarWidget>(UDefenderSelectionBarWidget::StaticClass(), TEXT("SelectionBar"));
+	if (UCanvasPanelSlot* BarSlot = RootCanvas->AddChildToCanvas(SelectionBar))
+	{
+		BarSlot->SetAnchors(FAnchors(0.0f, 1.0f, 1.0f, 1.0f));
+		BarSlot->SetAlignment(FVector2D(0.5f, 1.0f));
+		BarSlot->SetOffsets(FMargin(20.0f, -176.0f, 20.0f, 10.0f));
 	}
 }
 
@@ -319,17 +328,20 @@ void UTowerDefenseHUDWidget::UpdateSelectedDefenderDisplay()
 		PlayerController = Cast<ATowerDefensePlayerController>(GetOwningPlayer());
 	}
 
+	const bool bHasSelection = PlayerController && PlayerController->HasActiveDefenderSelection();
 	const FText Name = PlayerController
 		? PlayerController->GetSelectedDefenderDisplayName()
-		: FText::FromString(TEXT("Jungle Scout"));
-	const int32 Cost = PlayerController ? PlayerController->GetSelectedDefenderCost() : 25;
+		: FText::FromString(TEXT("None"));
+	const int32 Cost = PlayerController ? PlayerController->GetSelectedDefenderCost() : 0;
 
 	if (SelectedDefenderText)
 	{
-		SelectedDefenderText->SetText(FText::Format(
-			NSLOCTEXT("TowerDefense", "SelectedDefenderHUD", "Selected: {0} ({1})"),
-			Name,
-			FText::AsNumber(Cost)));
+		SelectedDefenderText->SetText(bHasSelection
+			? FText::Format(
+				NSLOCTEXT("TowerDefense", "SelectedDefenderHUD", "Selected: {0} ({1})"),
+				Name,
+				FText::AsNumber(Cost))
+			: NSLOCTEXT("TowerDefense", "NoDefenderSelectedHUD", "Selected: none"));
 	}
 }
 
@@ -372,14 +384,29 @@ void UTowerDefenseHUDWidget::UpdateResourcesDisplay(int32 Resources, int32 Defen
 
 	if (InstructionsText)
 	{
-		InstructionsText->SetText(bCanAfford
-			? FText::Format(
-				NSLOCTEXT("TowerDefense", "PlaceSelectedInstruction", "1 / 2 / 3 to choose   |   Click a pad to place {0}."),
-				SelectedName)
-			: FText::Format(
-				NSLOCTEXT("TowerDefense", "NeedResourcesSelected", "Need {0} resources for {1}. Defeat enemies or pick a cheaper defender."),
+		const bool bHasSelection = BoundPlayerController.IsValid() && BoundPlayerController->HasActiveDefenderSelection();
+		if (!bHasSelection)
+		{
+			InstructionsText->SetText(NSLOCTEXT("TowerDefense", "ChooseDefenderInstruction", "Choose a defender below, then click a pad. Esc / right-click cancels."));
+		}
+		else if (bCanAfford)
+		{
+			InstructionsText->SetText(FText::Format(
+				NSLOCTEXT("TowerDefense", "PlaceSelectedInstruction", "Click a green pad to place {0}. Esc / right-click cancels."),
+				SelectedName));
+		}
+		else
+		{
+			InstructionsText->SetText(FText::Format(
+				NSLOCTEXT("TowerDefense", "NeedResourcesSelected", "Need {0} resources for {1}."),
 				FText::AsNumber(SelectedCost),
 				SelectedName));
+		}
+	}
+
+	if (SelectionBar)
+	{
+		SelectionBar->RefreshBar();
 	}
 }
 

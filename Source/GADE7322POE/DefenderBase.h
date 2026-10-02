@@ -54,6 +54,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Defender")
 	float GetAttackCooldown() const { return AttackCooldown; }
 
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	FLinearColor GetBodyColor() const { return BodyColor; }
+
+	UFUNCTION(BlueprintPure, Category = "Defender")
+	UStaticMeshComponent* GetMeshComponent() const { return MeshComponent; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

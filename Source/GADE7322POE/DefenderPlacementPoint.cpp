@@ -4,6 +4,8 @@
 #include "GADE7322POE.h"
 #include "DefenderBase.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 
 ADefenderPlacementPoint::ADefenderPlacementPoint()
@@ -12,6 +14,7 @@ ADefenderPlacementPoint::ADefenderPlacementPoint()
 
 	bIsOccupied = false;
 	PlacementLocation = FVector::ZeroVector;
+	CurrentHighlight = EPlacementPadHighlight::None;
 	DefenderClass = ADefenderBase::StaticClass();
 
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
@@ -29,6 +32,19 @@ ADefenderPlacementPoint::ADefenderPlacementPoint()
 
 	MeshComponent->SetRelativeScale3D(FVector(1.4f, 1.4f, 0.12f));
 	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 8.0f));
+}
+
+void ADefenderPlacementPoint::BeginPlay()
+{
+	Super::BeginPlay();
+
+	UMaterialInterface* SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	if (SourceMaterial && MeshComponent)
+	{
+		PadMaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
+		MeshComponent->SetMaterial(0, PadMaterialInstance);
+		SetPlacementHighlight(EPlacementPadHighlight::None);
+	}
 }
 
 void ADefenderPlacementPoint::InitializePlacement(const FVector& InLocation)
@@ -103,11 +119,44 @@ void ADefenderPlacementPoint::NotifyDefenderDestroyed()
 	SetOccupied(false);
 }
 
+void ADefenderPlacementPoint::SetPlacementHighlight(EPlacementPadHighlight Highlight)
+{
+	CurrentHighlight = Highlight;
+	if (!PadMaterialInstance)
+	{
+		return;
+	}
+
+	FLinearColor Color(0.38f, 0.26f, 0.12f, 1.0f);
+	switch (Highlight)
+	{
+	case EPlacementPadHighlight::Available:
+		Color = FLinearColor(0.22f, 0.55f, 0.18f, 1.0f);
+		break;
+	case EPlacementPadHighlight::ValidHover:
+		Color = FLinearColor(0.95f, 0.82f, 0.15f, 1.0f);
+		break;
+	case EPlacementPadHighlight::Invalid:
+		Color = FLinearColor(0.72f, 0.16f, 0.12f, 1.0f);
+		break;
+	default:
+		break;
+	}
+
+	PadMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);
+	PadMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), Color);
+}
+
 void ADefenderPlacementPoint::UpdateVisualState()
 {
 	if (MeshComponent)
 	{
 		MeshComponent->SetVisibility(!bIsOccupied);
 		MeshComponent->SetCollisionEnabled(bIsOccupied ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
+	}
+
+	if (bIsOccupied)
+	{
+		SetPlacementHighlight(EPlacementPadHighlight::None);
 	}
 }

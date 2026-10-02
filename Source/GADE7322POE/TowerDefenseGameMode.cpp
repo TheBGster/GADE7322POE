@@ -10,6 +10,7 @@
 #include "DefenderPlacementPoint.h"
 #include "EnemyBase.h"
 #include "BananaProjectile.h"
+#include "DefenderPlacementPreview.h"
 #include "EnemySpawner.h"
 #include "HealthTestActor.h"
 #include "GADE7322POE.h"
@@ -383,6 +384,16 @@ void ATowerDefenseGameMode::DestroyGameplayActors()
 		if (IsValid(Projectile))
 		{
 			Projectile->Destroy();
+		}
+	}
+
+	TArray<AActor*> Previews;
+	UGameplayStatics::GetAllActorsOfClass(this, ADefenderPlacementPreview::StaticClass(), Previews);
+	for (AActor* Preview : Previews)
+	{
+		if (IsValid(Preview))
+		{
+			Preview->Destroy();
 		}
 	}
 

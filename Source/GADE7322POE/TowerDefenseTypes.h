@@ -87,6 +87,41 @@ namespace TowerDefenseTags
 	inline const FName VineTrap(TEXT("VineTrap"));
 }
 
+class ADefenderBase;
+
+UENUM(BlueprintType)
+enum class EPlacementPadHighlight : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Available UMETA(DisplayName = "Available"),
+	ValidHover UMETA(DisplayName = "Valid Hover"),
+	Invalid UMETA(DisplayName = "Invalid")
+};
+
+USTRUCT(BlueprintType)
+struct FDefenderCatalogEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	EDefenderKind Kind = EDefenderKind::JungleScout;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	FText Description;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	TSubclassOf<ADefenderBase> DefenderClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	FLinearColor AccentColor = FLinearColor(0.32f, 0.42f, 0.22f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender")
+	TObjectPtr<UTexture2D> Icon;
+};
+
 USTRUCT(BlueprintType)
 struct FWaveSpawnEntry
 {

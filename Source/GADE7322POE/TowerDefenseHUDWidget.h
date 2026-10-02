@@ -9,6 +9,7 @@
 
 class UTextBlock;
 class UProgressBar;
+class UDefenderSelectionBarWidget;
 class ATowerDefenseGameState;
 class ATowerDefensePlayerController;
 
@@ -67,6 +68,9 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UTextBlock> SelectedDefenderText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UDefenderSelectionBarWidget> SelectionBar;
 
 	void BuildDefaultLayout();
 	void BindToGameState();
