@@ -39,13 +39,8 @@ AVineTrap::AVineTrap()
 	VineRingMesh->SetRelativeScale3D(FVector(2.4f, 2.4f, 0.08f));
 	VineRingMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> TorusMesh(TEXT("/Engine/BasicShapes/Torus"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder"));
-	if (TorusMesh.Succeeded())
-	{
-		VineRingMesh->SetStaticMesh(TorusMesh.Object);
-	}
-	else if (CylinderMesh.Succeeded())
+	if (CylinderMesh.Succeeded())
 	{
 		VineRingMesh->SetStaticMesh(CylinderMesh.Object);
 	}

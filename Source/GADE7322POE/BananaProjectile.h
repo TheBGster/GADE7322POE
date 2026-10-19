@@ -9,7 +9,7 @@
 class UStaticMeshComponent;
 class USceneComponent;
 
-
+UCLASS()
 class GADE7322POE_API ABananaProjectile : public AActor
 {
 	GENERATED_BODY()
