@@ -4,6 +4,7 @@
 #include "DefenderSelectionBarWidget.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefensePlayerController.h"
+#include "UpgradeStripWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -66,6 +67,7 @@ void UTowerDefenseHUDWidget::NativeDestruct()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(PlacementFeedbackTimerHandle);
+		World->GetTimerManager().ClearTimer(BriefingTimerHandle);
 	}
 	Super::NativeDestruct();
 }
@@ -177,6 +179,44 @@ void UTowerDefenseHUDWidget::BuildDefaultLayout()
 		FeedbackSlot->SetPosition(FVector2D(0.0f, 180.0f));
 		FeedbackSlot->SetAutoSize(true);
 	}
+
+	GroveTitleText = MakeHUDText(WidgetTree, TEXT("GroveTitleText"), TEXT(""), 18, FLinearColor(0.86f, 0.94f, 0.55f));
+	if (UCanvasPanelSlot* GroveSlot = RootCanvas->AddChildToCanvas(GroveTitleText))
+	{
+		GroveSlot->SetAnchors(FAnchors(0.5f, 0.0f, 0.5f, 0.0f));
+		GroveSlot->SetAlignment(FVector2D(0.5f, 0.0f));
+		GroveSlot->SetPosition(FVector2D(0.0f, 28.0f));
+		GroveSlot->SetAutoSize(true);
+	}
+
+	WaveFlavourText = MakeHUDText(WidgetTree, TEXT("WaveFlavourText"), TEXT(""), 15, FLinearColor(0.90f, 0.86f, 0.62f));
+	if (UCanvasPanelSlot* FlavourSlot = RootCanvas->AddChildToCanvas(WaveFlavourText))
+	{
+		FlavourSlot->SetAnchors(FAnchors(0.5f, 0.0f, 0.5f, 0.0f));
+		FlavourSlot->SetAlignment(FVector2D(0.5f, 0.0f));
+		FlavourSlot->SetPosition(FVector2D(0.0f, 54.0f));
+		FlavourSlot->SetAutoSize(true);
+	}
+
+	BriefingText = MakeHUDText(WidgetTree, TEXT("BriefingText"), TEXT(""), 16, FLinearColor(0.96f, 0.92f, 0.72f));
+	BriefingText->SetAutoWrapText(true);
+	if (UCanvasPanelSlot* BriefingSlot = RootCanvas->AddChildToCanvas(BriefingText))
+	{
+		BriefingSlot->SetAnchors(FAnchors(0.5f, 0.0f, 0.5f, 0.0f));
+		BriefingSlot->SetAlignment(FVector2D(0.5f, 0.0f));
+		BriefingSlot->SetPosition(FVector2D(0.0f, 86.0f));
+		BriefingSlot->SetSize(FVector2D(720.0f, 72.0f));
+		BriefingSlot->SetAutoSize(false);
+	}
+
+	UpgradeStrip = WidgetTree->ConstructWidget<UUpgradeStripWidget>(UUpgradeStripWidget::StaticClass(), TEXT("UpgradeStrip"));
+	if (UCanvasPanelSlot* UpgradeSlot = RootCanvas->AddChildToCanvas(UpgradeStrip))
+	{
+		UpgradeSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
+		UpgradeSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+		UpgradeSlot->SetPosition(FVector2D(-28.0f, 28.0f));
+		UpgradeSlot->SetAutoSize(true);
+	}
 }
 
 void UTowerDefenseHUDWidget::BindToGameState()
@@ -198,6 +238,8 @@ void UTowerDefenseHUDWidget::BindToGameState()
 	GameState->OnResourcesChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleResourcesChanged);
 	GameState->OnTowerHealthChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleTowerHealthChanged);
 	GameState->OnWaveChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleWaveChanged);
+	GameState->OnUpgradeChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleUpgradeChanged);
+	GameState->OnChronicleChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleChronicleChanged);
 }
 
 void UTowerDefenseHUDWidget::UnbindFromGameState()
@@ -207,6 +249,8 @@ void UTowerDefenseHUDWidget::UnbindFromGameState()
 		GameState->OnResourcesChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleResourcesChanged);
 		GameState->OnTowerHealthChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleTowerHealthChanged);
 		GameState->OnWaveChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleWaveChanged);
+		GameState->OnUpgradeChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleUpgradeChanged);
+		GameState->OnChronicleChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleChronicleChanged);
 	}
 
 	BoundGameState.Reset();
@@ -234,6 +278,11 @@ void UTowerDefenseHUDWidget::RefreshFromGameState()
 	UpdateTowerHealthDisplay(CurrentHealth, MaxHealth);
 	UpdateWaveDisplay(GameState->GetCurrentWave(), LastEnemiesInWave, GameState->GetEnemiesDefeated());
 	UpdateSelectedDefenderDisplay();
+	UpdateChronicleDisplay();
+	if (UpgradeStrip)
+	{
+		UpgradeStrip->RefreshStrip();
+	}
 	OnHUDUpdated(Resources, DefenderCost, CurrentHealth, MaxHealth);
 }
 
@@ -267,6 +316,22 @@ void UTowerDefenseHUDWidget::HandleWaveChanged(int32 NewWave, int32 EnemiesInWav
 	const ATowerDefenseGameState* GameState = GetTowerDefenseGameState();
 	const int32 Defeated = GameState ? GameState->GetEnemiesDefeated() : 0;
 	UpdateWaveDisplay(NewWave, EnemiesInWave, Defeated);
+	UpdateChronicleDisplay();
+}
+
+void UTowerDefenseHUDWidget::HandleUpgradeChanged(EUpgradeTrack Track, int32 NewTier)
+{
+	(void)Track;
+	(void)NewTier;
+	if (UpgradeStrip)
+	{
+		UpgradeStrip->RefreshStrip();
+	}
+}
+
+void UTowerDefenseHUDWidget::HandleChronicleChanged()
+{
+	UpdateChronicleDisplay();
 }
 
 void UTowerDefenseHUDWidget::HandleSelectedDefenderChanged(EDefenderKind Kind, int32 Cost)
@@ -429,6 +494,11 @@ void UTowerDefenseHUDWidget::UpdateResourcesDisplay(int32 Resources, int32 Defen
 	{
 		SelectionBar->RefreshBar();
 	}
+
+	if (UpgradeStrip)
+	{
+		UpgradeStrip->RefreshStrip();
+	}
 }
 
 void UTowerDefenseHUDWidget::UpdateTowerHealthDisplay(float CurrentHealth, float MaxHealth)
@@ -479,6 +549,47 @@ void UTowerDefenseHUDWidget::ClearPlacementFeedback()
 	if (PlacementFeedbackText)
 	{
 		PlacementFeedbackText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UTowerDefenseHUDWidget::UpdateChronicleDisplay()
+{
+	const ATowerDefenseGameState* GameState = GetTowerDefenseGameState();
+	if (!GameState)
+	{
+		return;
+	}
+
+	const FGroveChronicle& Chronicle = GameState->GetGroveChronicle();
+	if (GroveTitleText)
+	{
+		GroveTitleText->SetText(Chronicle.GroveName.IsEmpty()
+			? FText::GetEmpty()
+			: FText::Format(NSLOCTEXT("TowerDefense", "GroveTitleHUD", "{0}  |  {1}"), Chronicle.GroveName, Chronicle.Omen));
+	}
+
+	if (WaveFlavourText)
+	{
+		WaveFlavourText->SetText(GameState->GetCurrentWaveFlavour());
+	}
+
+	if (BriefingText && !Chronicle.OpeningBrief.IsEmpty())
+	{
+		BriefingText->SetText(Chronicle.OpeningBrief);
+		BriefingText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(BriefingTimerHandle);
+			World->GetTimerManager().SetTimer(BriefingTimerHandle, this, &ThisClass::HideBriefing, 8.0f, false);
+		}
+	}
+}
+
+void UTowerDefenseHUDWidget::HideBriefing()
+{
+	if (BriefingText)
+	{
+		BriefingText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 

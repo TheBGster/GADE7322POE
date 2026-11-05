@@ -7,6 +7,7 @@
 #include "VineTrap.generated.h"
 
 class UStaticMeshComponent;
+class UMaterialInstanceDynamic;
 
 
 UCLASS()
@@ -17,9 +18,15 @@ class GADE7322POE_API AVineTrap : public ADefenderBase
 public:
 	AVineTrap();
 
+	float GetSlowPercent() const { return SlowPercent; }
+	float GetPulseDamage() const { return PulseDamage; }
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
 	virtual void AttackTarget() override;
+	virtual void ApplyKindSpecificUpgrade(int32 TierIndex) override;
+	void ApplyVineMaterials();
 
 	void PulseVines();
 	void ResetPulseVisual();
@@ -37,4 +44,6 @@ protected:
 	float PulseDamage;
 
 	FTimerHandle PulseVisualTimerHandle;
+	FVector RestingRingScale;
+	TObjectPtr<UMaterialInstanceDynamic> RingMaterialInstance;
 };

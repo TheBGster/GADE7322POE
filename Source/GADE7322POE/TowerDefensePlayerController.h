@@ -11,6 +11,8 @@
 class ADefenderBase;
 class ADefenderPlacementPoint;
 class ADefenderPlacementPreview;
+class UPostProcessComponent;
+class UMaterialInstanceDynamic;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSelectedDefenderChanged, EDefenderKind, Kind, int32, Cost);
 
@@ -65,6 +67,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Pause")
 	bool IsGamePausedMenu() const { return bIsPauseMenuOpen; }
 
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Upgrades")
+	bool TryBuyUpgrade(EUpgradeTrack Track);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -94,6 +99,12 @@ protected:
 
 	UFUNCTION()
 	void HandleMatchStateChanged(ETowerDefenseMatchState NewState);
+
+	UFUNCTION()
+	void HandleTowerHealthChanged(float CurrentHealth, float MaxHealth);
+
+	void EnsureGrovePressure();
+	void UpdateGrovePressure(float CurrentHealth, float MaxHealth, bool bDamaged);
 
 	bool GetSelectionHit(FHitResult& OutHit) const;
 	bool IsCursorOverInteractiveWidget() const;
@@ -138,4 +149,13 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Debug")
 	bool bApplyDebugDamageOnSelect;
+
+	UPROPERTY()
+	TObjectPtr<UPostProcessComponent> GrovePressureComponent;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> GrovePressureMaterial;
+
+	float LastKnownTowerHealth;
+	float GroveDamagePulse;
 };

@@ -137,3 +137,33 @@ struct FWaveSpawnEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Waves")
 	float DelayAfterSpawn = 1.5f;
 };
+
+UENUM(BlueprintType)
+enum class EUpgradeTrack : uint8
+{
+	Tower UMETA(DisplayName = "Tower"),
+	JungleScout UMETA(DisplayName = "Jungle Scout"),
+	BananaCannon UMETA(DisplayName = "Banana Cannon"),
+	VineTrap UMETA(DisplayName = "Vine Trap")
+};
+
+USTRUCT(BlueprintType)
+struct FGroveChronicle
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chronicle")
+	int32 Seed = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chronicle")
+	FText GroveName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chronicle")
+	FText Omen;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chronicle")
+	FText OpeningBrief;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Chronicle")
+	TArray<FText> WaveProphecies;
+};

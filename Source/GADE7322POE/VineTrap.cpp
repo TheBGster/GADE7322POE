@@ -4,12 +4,14 @@
 #include "EnemyBase.h"
 #include "GADE7322POE.h"
 #include "GameFramework/DamageType.h"
+#include "JungleVisuals.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "TimerManager.h"
+#include "TowerDefenseUpgrade.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVineTrap::AVineTrap()
@@ -36,7 +38,9 @@ AVineTrap::AVineTrap()
 	VineRingMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VineRingMesh"));
 	VineRingMesh->SetupAttachment(SceneRoot);
 	VineRingMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	VineRingMesh->SetRelativeScale3D(FVector(2.4f, 2.4f, 0.08f));
+	RestingRingScale = FVector(2.4f, 2.4f, 0.08f);
+	VisualSwayAmount = 8.0f;
+	VineRingMesh->SetRelativeScale3D(RestingRingScale);
 	VineRingMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder"));
@@ -54,21 +58,35 @@ AVineTrap::AVineTrap()
 void AVineTrap::BeginPlay()
 {
 	Super::BeginPlay();
+	ApplyVineMaterials();
+}
 
-	if (VineRingMesh)
+void AVineTrap::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (RingMaterialInstance && GetWorld())
 	{
-		UMaterialInterface* SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-		if (SourceMaterial)
-		{
-			if (UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(SourceMaterial, this))
-			{
-				const FLinearColor RingColor(0.05f, 0.28f, 0.08f, 1.0f);
-				Material->SetVectorParameterValue(TEXT("Color"), RingColor);
-				Material->SetVectorParameterValue(TEXT("BaseColor"), RingColor);
-				VineRingMesh->SetMaterial(0, Material);
-			}
-		}
+		RingMaterialInstance->SetScalarParameterValue(TEXT("Time"), GetWorld()->GetTimeSeconds());
+		RingMaterialInstance->SetScalarParameterValue(TEXT("SwayAmount"), VisualSwayAmount);
+		RingMaterialInstance->SetScalarParameterValue(TEXT("SwaySpeed"), 1.6f + AppliedUpgradeTier * 0.35f);
+		RingMaterialInstance->SetScalarParameterValue(TEXT("UpgradeTier"), static_cast<float>(AppliedUpgradeTier));
 	}
+}
+
+void AVineTrap::ApplyVineMaterials()
+{
+	if (!VineRingMesh)
+	{
+		return;
+	}
+
+	RingMaterialInstance = JungleVisuals::ApplyBodyMaterial(
+		VineRingMesh,
+		this,
+		FLinearColor(0.05f, 0.28f, 0.08f, 1.0f),
+		AppliedUpgradeTier,
+		VisualSwayAmount);
 }
 
 void AVineTrap::AttackTarget()
@@ -107,7 +125,7 @@ void AVineTrap::PulseVines()
 
 	if (VineRingMesh)
 	{
-		VineRingMesh->SetRelativeScale3D(FVector(3.1f, 3.1f, 0.10f));
+		VineRingMesh->SetRelativeScale3D(RestingRingScale * FVector(1.29f, 1.29f, 1.25f));
 		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().ClearTimer(PulseVisualTimerHandle);
@@ -122,6 +140,25 @@ void AVineTrap::ResetPulseVisual()
 {
 	if (VineRingMesh)
 	{
-		VineRingMesh->SetRelativeScale3D(FVector(2.4f, 2.4f, 0.08f));
+		VineRingMesh->SetRelativeScale3D(RestingRingScale);
 	}
+}
+
+void AVineTrap::ApplyKindSpecificUpgrade(int32 TierIndex)
+{
+	const FUpgradeStep* Step = TowerDefenseUpgrade::GetStep(EUpgradeTrack::VineTrap, TierIndex);
+	if (!Step)
+	{
+		return;
+	}
+
+	SlowPercent = FMath::Clamp(SlowPercent + Step->BonusSlow, 0.0f, 0.85f);
+	PulseDamage += Step->BonusPulseDamage;
+	VisualSwayAmount = 8.0f + TierIndex * 6.0f;
+	RestingRingScale *= Step->ScaleMultiplier;
+	if (VineRingMesh)
+	{
+		VineRingMesh->SetRelativeScale3D(RestingRingScale);
+	}
+	ApplyVineMaterials();
 }

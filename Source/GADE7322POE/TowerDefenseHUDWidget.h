@@ -10,6 +10,7 @@
 class UTextBlock;
 class UProgressBar;
 class UDefenderSelectionBarWidget;
+class UUpgradeStripWidget;
 class ATowerDefenseGameState;
 class ATowerDefensePlayerController;
 
@@ -46,6 +47,12 @@ protected:
 	UFUNCTION()
 	void HandleSelectedDefenderChanged(EDefenderKind Kind, int32 Cost);
 
+	UFUNCTION()
+	void HandleUpgradeChanged(EUpgradeTrack Track, int32 NewTier);
+
+	UFUNCTION()
+	void HandleChronicleChanged();
+
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UTextBlock> TowerHealthText;
 
@@ -73,6 +80,18 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
 	TObjectPtr<UTextBlock> PlacementFeedbackText;
 
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UTextBlock> GroveTitleText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UTextBlock> BriefingText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UTextBlock> WaveFlavourText;
+
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "Tower Defense|UI")
+	TObjectPtr<UUpgradeStripWidget> UpgradeStrip;
+
 	void BuildDefaultLayout();
 	void BindToGameState();
 	void UnbindFromGameState();
@@ -82,6 +101,8 @@ protected:
 	void UpdateTowerHealthDisplay(float CurrentHealth, float MaxHealth);
 	void UpdateWaveDisplay(int32 Wave, int32 EnemiesInWave, int32 EnemiesDefeated);
 	void UpdateSelectedDefenderDisplay();
+	void UpdateChronicleDisplay();
+	void HideBriefing();
 	ATowerDefenseGameState* GetTowerDefenseGameState() const;
 
 	void ClearPlacementFeedback();
@@ -90,4 +111,5 @@ protected:
 	TWeakObjectPtr<ATowerDefensePlayerController> BoundPlayerController;
 	int32 LastEnemiesInWave = 0;
 	FTimerHandle PlacementFeedbackTimerHandle;
+	FTimerHandle BriefingTimerHandle;
 };

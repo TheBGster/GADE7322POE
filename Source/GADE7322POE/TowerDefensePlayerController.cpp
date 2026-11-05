@@ -11,10 +11,15 @@
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/DamageType.h"
 #include "HealthComponent.h"
+#include "JungleVisuals.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Components/PostProcessComponent.h"
+#include "Engine/Scene.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefenseHUD.h"
 #include "TowerDefenseHUDWidget.h"
+#include "TowerDefenseUpgrade.h"
 #include "VineTrap.h"
 
 ATowerDefensePlayerController::ATowerDefensePlayerController()
@@ -31,6 +36,8 @@ ATowerDefensePlayerController::ATowerDefensePlayerController()
 	SelectedDefenderKind = EDefenderKind::JungleScout;
 	SelectedDefenderClass = ADefenderBase::StaticClass();
 	PlacementSnapRadius = 180.0f;
+	LastKnownTowerHealth = 0.0f;
+	GroveDamagePulse = 0.0f;
 	BuildDefaultCatalog();
 }
 
@@ -76,7 +83,11 @@ void ATowerDefensePlayerController::BeginPlay()
 	{
 		GameState->OnResourcesChanged.AddDynamic(this, &ThisClass::HandleResourcesChanged);
 		GameState->OnMatchStateChanged.AddDynamic(this, &ThisClass::HandleMatchStateChanged);
+		GameState->OnTowerHealthChanged.AddDynamic(this, &ThisClass::HandleTowerHealthChanged);
+		LastKnownTowerHealth = GameState->GetTowerCurrentHealth();
 	}
+
+	EnsureGrovePressure();
 
 	OnSelectedDefenderChanged.Broadcast(SelectedDefenderKind, GetSelectedDefenderCost());
 	UE_LOG(LogTowerDefense, Log, TEXT("Player controller ready. Choose a defender from the bottom bar, then click a pad."));
@@ -88,6 +99,7 @@ void ATowerDefensePlayerController::EndPlay(const EEndPlayReason::Type EndPlayRe
 	{
 		GameState->OnResourcesChanged.RemoveDynamic(this, &ThisClass::HandleResourcesChanged);
 		GameState->OnMatchStateChanged.RemoveDynamic(this, &ThisClass::HandleMatchStateChanged);
+		GameState->OnTowerHealthChanged.RemoveDynamic(this, &ThisClass::HandleTowerHealthChanged);
 	}
 
 	DestroyPlacementPreview();
@@ -118,6 +130,13 @@ void ATowerDefensePlayerController::PlayerTick(float DeltaTime)
 	if (bHasActiveSelection)
 	{
 		UpdatePlacementPreview();
+	}
+
+	EnsureGrovePressure();
+	GroveDamagePulse = FMath::Max(GroveDamagePulse - DeltaTime * 1.35f, 0.0f);
+	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	{
+		UpdateGrovePressure(GameState->GetTowerCurrentHealth(), GameState->GetTowerMaxHealth(), false);
 	}
 }
 
@@ -278,6 +297,106 @@ void ATowerDefensePlayerController::HandleMatchStateChanged(ETowerDefenseMatchSt
 	if (NewState == ETowerDefenseMatchState::GameOver && bIsPauseMenuOpen)
 	{
 		ResumeGame();
+	}
+}
+
+bool ATowerDefensePlayerController::TryBuyUpgrade(EUpgradeTrack Track)
+{
+	ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
+	if (!GameState)
+	{
+		return false;
+	}
+
+	if (GameState->GetUpgradeTier(Track) >= TowerDefenseUpgrade::GetMaxTier())
+	{
+		ShowPlacementFeedback(NSLOCTEXT("TowerDefense", "UpgradeAlreadyMax", "That grove upgrade is maxed."), FLinearColor(0.75f, 0.75f, 0.70f));
+		return false;
+	}
+
+	if (!GameState->CanBuyUpgrade(Track))
+	{
+		ShowPlacementFeedback(FText::Format(
+			NSLOCTEXT("TowerDefense", "UpgradeNeedCoins", "Need {0} coins for {1}."),
+			FText::AsNumber(GameState->GetNextUpgradeCost(Track)),
+			GameState->GetNextUpgradeName(Track)), FLinearColor(0.92f, 0.32f, 0.28f));
+		return false;
+	}
+
+	const FText Name = GameState->GetNextUpgradeName(Track);
+	if (!GameState->TryBuyUpgrade(Track))
+	{
+		return false;
+	}
+
+	ShowPlacementFeedback(FText::Format(
+		NSLOCTEXT("TowerDefense", "UpgradeBought", "Upgraded {0} to {1}."),
+		TowerDefenseUpgrade::GetTrackDisplayName(Track),
+		Name), FLinearColor(0.95f, 0.82f, 0.22f));
+	return true;
+}
+
+void ATowerDefensePlayerController::HandleTowerHealthChanged(float CurrentHealth, float MaxHealth)
+{
+	const bool bDamaged = CurrentHealth < LastKnownTowerHealth - 0.5f;
+	if (bDamaged)
+	{
+		GroveDamagePulse = 1.0f;
+	}
+
+	LastKnownTowerHealth = CurrentHealth;
+	UpdateGrovePressure(CurrentHealth, MaxHealth, bDamaged);
+}
+
+void ATowerDefensePlayerController::EnsureGrovePressure()
+{
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		return;
+	}
+
+	if (!GrovePressureComponent)
+	{
+		GrovePressureComponent = NewObject<UPostProcessComponent>(ControlledPawn, TEXT("GrovePressure"));
+		GrovePressureComponent->SetupAttachment(ControlledPawn->GetRootComponent());
+		GrovePressureComponent->RegisterComponent();
+		GrovePressureComponent->bUnbound = true;
+		GrovePressureComponent->Priority = 10.0f;
+		GrovePressureComponent->BlendWeight = 0.0f;
+		GrovePressureComponent->bEnabled = true;
+	}
+
+	if (!GrovePressureMaterial)
+	{
+		if (UMaterialInterface* Source = JungleVisuals::GetGrovePressureMaterial())
+		{
+			GrovePressureMaterial = UMaterialInstanceDynamic::Create(Source, this);
+			FWeightedBlendable Blendable;
+			Blendable.Object = GrovePressureMaterial;
+			Blendable.Weight = 1.0f;
+			GrovePressureComponent->Settings.WeightedBlendables.Array.Add(Blendable);
+		}
+	}
+}
+
+void ATowerDefensePlayerController::UpdateGrovePressure(float CurrentHealth, float MaxHealth, bool bDamaged)
+{
+	(void)bDamaged;
+	EnsureGrovePressure();
+	if (!GrovePressureComponent)
+	{
+		return;
+	}
+
+	const float Percent = MaxHealth > 0.0f ? CurrentHealth / MaxHealth : 1.0f;
+	const float Pressure = Percent < 0.55f ? FMath::Clamp((0.55f - Percent) / 0.55f, 0.0f, 1.0f) : 0.0f;
+	GrovePressureComponent->BlendWeight = FMath::Clamp(Pressure * 1.15f + GroveDamagePulse * 0.80f, 0.0f, 1.0f);
+
+	if (GrovePressureMaterial)
+	{
+		GrovePressureMaterial->SetScalarParameterValue(TEXT("Pressure"), Pressure);
+		GrovePressureMaterial->SetScalarParameterValue(TEXT("DamagePulse"), GroveDamagePulse);
 	}
 }
 
