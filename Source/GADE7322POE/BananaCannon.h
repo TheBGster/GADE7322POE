@@ -17,9 +17,12 @@ class GADE7322POE_API ABananaCannon : public ADefenderBase
 public:
 	ABananaCannon();
 
+	float GetProjectileSpeed() const { return ProjectileSpeed; }
+
 protected:
 	virtual void FindTarget() override;
 	virtual void AttackTarget() override;
+	virtual void ApplyKindSpecificUpgrade(int32 TierIndex) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Combat")
 	TSubclassOf<ABananaProjectile> ProjectileClass;

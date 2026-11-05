@@ -13,6 +13,7 @@ class UStaticMeshComponent;
 class USceneComponent;
 class UWidgetComponent;
 class UMaterialInstanceDynamic;
+class UStaticMesh;
 
 UENUM(BlueprintType)
 enum class EEnemyBehaviorState : uint8
@@ -104,6 +105,11 @@ protected:
 	void RestoreBodyColor();
 	void RecalculateSlow();
 	float GetMaxSlowPercent() const;
+	void EnsureCharacterMeshLoaded();
+	void SetupCharacterMesh();
+	void ApplyMaterialTint(const FLinearColor& Color);
+
+	virtual const TCHAR* GetCharacterMeshPath() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -128,6 +134,15 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Visual")
 	FLinearColor BodyColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Visual")
+	TObjectPtr<UStaticMesh> CharacterMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Visual", meta = (ClampMin = "10.0"))
+	float CharacterMeshTargetHeight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Visual")
+	float CharacterMeshYawOffset;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Health", meta = (ClampMin = "1.0"))
 	float MaxHealth;

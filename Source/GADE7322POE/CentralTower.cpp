@@ -3,9 +3,11 @@
 #include "CentralTower.h"
 #include "GADE7322POE.h"
 #include "HealthComponent.h"
+#include "JungleVisuals.h"
 #include "TowerDefenseGameMode.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefenseTypes.h"
+#include "TowerDefenseUpgrade.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
@@ -19,7 +21,10 @@
 
 ACentralTower::ACentralTower()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	AppliedUpgradeTier = 0;
+	VisualSwayAmount = 0.0f;
+	BaseMeshScale = FVector(1.6f, 1.6f, 2.8f);
 
 	MaxHealth = 100.0f;
 	AttackRange = 800.0f;
@@ -51,9 +56,20 @@ ACentralTower::ACentralTower()
 		BaseTowerMaterial = ShapeMaterial.Object;
 	}
 
-	const FVector MeshScale(1.6f, 1.6f, 2.8f);
-	MeshComponent->SetRelativeScale3D(MeshScale);
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * MeshScale.Z));
+	MeshComponent->SetRelativeScale3D(BaseMeshScale);
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+
+	CanopyRingMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CanopyRingMesh"));
+	CanopyRingMesh->SetupAttachment(SceneRoot);
+	CanopyRingMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CanopyRingMesh->SetHiddenInGame(true);
+	CanopyRingMesh->SetVisibility(false);
+	CanopyRingMesh->SetRelativeScale3D(FVector(2.4f, 2.4f, 0.12f));
+	CanopyRingMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 210.0f));
+	if (CylinderMesh.Succeeded())
+	{
+		CanopyRingMesh->SetStaticMesh(CylinderMesh.Object);
+	}
 
 	AttackRangeSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AttackRangeSphere"));
 	AttackRangeSphere->SetupAttachment(SceneRoot);
@@ -89,8 +105,18 @@ void ACentralTower::BeginPlay()
 		SyncHealthToGameState();
 	}
 
+	if (MeshComponent)
+	{
+		BaseMeshScale = MeshComponent->GetRelativeScale3D();
+	}
+
 	ApplyTowerMaterial();
 	StartAttackTimer();
+
+	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	{
+		SyncUpgradesToTier(GameState->GetUpgradeTier(EUpgradeTrack::Tower));
+	}
 
 	if (bDrawAttackRange)
 	{
@@ -99,6 +125,17 @@ void ACentralTower::BeginPlay()
 
 	UE_LOG(LogTowerDefense, Log, TEXT("Central tower spawned at %s with %.0f health and %.0f attack range."),
 		*GetActorLocation().ToCompactString(), MaxHealth, AttackRange);
+}
+
+void ACentralTower::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (TowerMaterialInstance && GetWorld())
+	{
+		TowerMaterialInstance->SetScalarParameterValue(TEXT("Time"), GetWorld()->GetTimeSeconds());
+		TowerMaterialInstance->SetScalarParameterValue(TEXT("UpgradeTier"), static_cast<float>(AppliedUpgradeTier));
+	}
 }
 
 void ACentralTower::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -306,31 +343,92 @@ void ACentralTower::ApplyTowerMaterial()
 		return;
 	}
 
-	UMaterialInterface* SourceMaterial = BaseTowerMaterial.Get();
-	if (!SourceMaterial)
-	{
-		SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-	}
-
-	if (!SourceMaterial)
-	{
-		UE_LOG(LogTowerDefense, Warning, TEXT("Could not load a base material for the central tower."));
-		return;
-	}
-
-	if (!TowerMaterialInstance || TowerMaterialInstance->Parent != SourceMaterial)
-	{
-		TowerMaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
-	}
+	TowerMaterialInstance = JungleVisuals::ApplyBodyMaterial(
+		MeshComponent,
+		this,
+		TowerColor,
+		AppliedUpgradeTier,
+		0.0f);
 
 	if (!TowerMaterialInstance)
 	{
+		UE_LOG(LogTowerDefense, Warning, TEXT("Could not load a base material for the central tower."));
+	}
+}
+
+void ACentralTower::ApplyUpgradeStep(int32 TierIndex)
+{
+	if (TierIndex != AppliedUpgradeTier + 1)
+	{
 		return;
 	}
 
-	TowerMaterialInstance->SetVectorParameterValue(TEXT("Color"), TowerColor);
-	TowerMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), TowerColor);
-	MeshComponent->SetMaterial(0, TowerMaterialInstance);
+	const FUpgradeStep* Step = TowerDefenseUpgrade::GetStep(EUpgradeTrack::Tower, TierIndex);
+	if (!Step)
+	{
+		return;
+	}
 
-	UE_LOG(LogTowerDefense, Log, TEXT("Applied grey tower material %s."), *TowerColor.ToString());
+	if (HealthComponent)
+	{
+		HealthComponent->IncreaseMaxHealth(Step->BonusMaxHealth, true);
+		MaxHealth = HealthComponent->GetMaxHealth();
+		SyncHealthToGameState();
+	}
+
+	AttackDamage += Step->BonusDamage;
+	AttackCooldown = FMath::Max(AttackCooldown * Step->CooldownMultiplier, 0.1f);
+	TowerColor = Step->Color;
+	BaseMeshScale *= Step->ScaleMultiplier;
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(BaseMeshScale);
+		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+	}
+
+	if (TierIndex >= 1)
+	{
+		VisualSwayAmount = 6.0f + TierIndex * 4.0f;
+		EnsureCanopyRing();
+	}
+
+	AppliedUpgradeTier = TierIndex;
+	ApplyTowerMaterial();
+	StartAttackTimer();
+	RefreshUpgradeVisuals();
+	JungleVisuals::SpawnUpgradeBloom(GetWorld(), GetActorLocation() + FVector(0.0f, 0.0f, 160.0f));
+}
+
+void ACentralTower::SyncUpgradesToTier(int32 GlobalTier)
+{
+	const int32 TargetTier = FMath::Clamp(GlobalTier, 0, TowerDefenseUpgrade::GetMaxTier());
+	while (AppliedUpgradeTier < TargetTier)
+	{
+		ApplyUpgradeStep(AppliedUpgradeTier + 1);
+	}
+}
+
+void ACentralTower::EnsureCanopyRing()
+{
+	if (!CanopyRingMesh)
+	{
+		return;
+	}
+
+	CanopyRingMesh->SetHiddenInGame(false);
+	CanopyRingMesh->SetVisibility(true);
+	JungleVisuals::ApplyBodyMaterial(
+		CanopyRingMesh,
+		this,
+		FLinearColor(0.16f, 0.52f, 0.18f, 1.0f),
+		AppliedUpgradeTier,
+		VisualSwayAmount);
+}
+
+void ACentralTower::RefreshUpgradeVisuals()
+{
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(BaseMeshScale);
+	}
 }

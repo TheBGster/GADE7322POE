@@ -3,7 +3,6 @@
 #include "ChimpRaider.h"
 #include "Components/WidgetComponent.h"
 #include "TimerManager.h"
-#include "UObject/ConstructorHelpers.h"
 
 AChimpRaider::AChimpRaider()
 {
@@ -20,21 +19,14 @@ AChimpRaider::AChimpRaider()
 	DamagedSpeedBurstDuration = 1.1f;
 	Tags.AddUnique(TowerDefenseTags::ChimpRaider);
 
-	if (MeshComponent)
+	CharacterMeshTargetHeight = 68.0f;
+	if (CharacterMesh)
 	{
-		static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(TEXT("/Engine/BasicShapes/Cone"));
-		if (ConeMesh.Succeeded())
-		{
-			MeshComponent->SetStaticMesh(ConeMesh.Object);
-		}
-
-		MeshComponent->SetRelativeScale3D(FVector(0.40f, 0.40f, 0.70f));
-		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 35.0f));
+		SetupCharacterMesh();
 	}
 
 	if (HealthBarComponent)
 	{
-		HealthBarComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 80.0f));
 		HealthBarComponent->SetDrawSize(FVector2D(100.0f, 24.0f));
 	}
 }

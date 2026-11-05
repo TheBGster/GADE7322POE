@@ -34,6 +34,7 @@ AEnemySpawner::AEnemySpawner()
 	CachedResources = 0;
 	CachedEnemiesDefeated = 0;
 	CachedDefenseDPS = 0.0f;
+	CachedUpgradePower = 0;
 }
 
 void AEnemySpawner::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -205,6 +206,7 @@ void AEnemySpawner::BuildCurrentWave()
 	CachedTowerHealthPercent = 1.0f;
 	CachedResources = 0;
 	CachedEnemiesDefeated = 0;
+	CachedUpgradePower = 0;
 
 	if (UWorld* World = GetWorld())
 	{
@@ -240,9 +242,18 @@ void AEnemySpawner::BuildCurrentWave()
 		CachedTowerHealthPercent = MaxHealth > 0.0f ? GameState->GetTowerCurrentHealth() / MaxHealth : 1.0f;
 		CachedResources = GameState->GetCurrentResources();
 		CachedEnemiesDefeated = GameState->GetEnemiesDefeated();
+		CachedUpgradePower = GameState->GetTotalUpgradePower();
 	}
 
 	int32 WaveSize = 4 + CurrentWaveNumber;
+	if (CachedUpgradePower >= 3)
+	{
+		++WaveSize;
+	}
+	if (CachedUpgradePower >= 6)
+	{
+		++WaveSize;
+	}
 	if (CachedResources >= 80)
 	{
 		++WaveSize;
@@ -301,8 +312,8 @@ EEnemyKind AEnemySpawner::PickWeightedEnemyKind(int32 GorillasSpawned, int32 Chi
 	const int32 MaxChimps = FMath::Clamp(2 + CurrentWaveNumber / 2, 2, 6);
 
 	float ScoutWeight = 1.0f;
-	float GorillaWeight = 0.16f + CurrentWaveNumber * 0.035f;
-	float ChimpWeight = 0.20f + CurrentWaveNumber * 0.045f;
+	float GorillaWeight = 0.16f + CurrentWaveNumber * 0.035f + CachedUpgradePower * 0.04f;
+	float ChimpWeight = 0.20f + CurrentWaveNumber * 0.045f + CachedUpgradePower * 0.035f;
 
 	if (CachedCannonCount >= 2 || (CachedCannonCount > 0 && CachedCannonCount >= CachedScoutCount))
 	{

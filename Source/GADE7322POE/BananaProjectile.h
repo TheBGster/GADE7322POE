@@ -8,6 +8,7 @@
 
 class UStaticMeshComponent;
 class USceneComponent;
+class UStaticMesh;
 
 UCLASS()
 class GADE7322POE_API ABananaProjectile : public AActor
@@ -17,13 +18,15 @@ class GADE7322POE_API ABananaProjectile : public AActor
 public:
 	ABananaProjectile();
 
-	void InitialiseProjectile(AActor* InTarget, AActor* InInstigator, float InDamage, float InSpeed);
+	void InitialiseProjectile(AActor* InTarget, AActor* InInstigator, float InDamage, float InSpeed, float InScale = 1.0f);
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
 	void ApplyColor();
+	void ApplyBananaMesh();
+	void NormalizeBananaScale(float ExtraScale);
 	void Detonate();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Projectile")
@@ -40,6 +43,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Projectile")
 	FLinearColor BananaColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Projectile")
+	TObjectPtr<UStaticMesh> BananaMesh;
 
 	TWeakObjectPtr<AActor> TargetActor;
 	TWeakObjectPtr<AActor> DamageInstigator;

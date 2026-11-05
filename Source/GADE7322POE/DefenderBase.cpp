@@ -5,8 +5,10 @@
 #include "CombatStatusWidget.h"
 #include "DefenderPlacementPoint.h"
 #include "HealthComponent.h"
+#include "JungleVisuals.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefenseTypes.h"
+#include "TowerDefenseUpgrade.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
@@ -20,7 +22,10 @@
 
 ADefenderBase::ADefenderBase()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	AppliedUpgradeTier = 0;
+	VisualSwayAmount = 0.0f;
+	BaseMeshScale = FVector(1.0f, 1.0f, 1.5f);
 
 	MaxHealth = 80.0f;
 	AttackRange = 700.0f;
@@ -49,9 +54,20 @@ ADefenderBase::ADefenderBase()
 		MeshComponent->SetStaticMesh(CylinderMesh.Object);
 	}
 
-	const FVector MeshScale(1.0f, 1.0f, 1.5f);
-	MeshComponent->SetRelativeScale3D(MeshScale);
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * MeshScale.Z));
+	MeshComponent->SetRelativeScale3D(BaseMeshScale);
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+
+	CollarMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CollarMesh"));
+	CollarMesh->SetupAttachment(SceneRoot);
+	CollarMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CollarMesh->SetHiddenInGame(true);
+	CollarMesh->SetVisibility(false);
+	CollarMesh->SetRelativeScale3D(FVector(1.35f, 1.35f, 0.18f));
+	CollarMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 118.0f));
+	if (CylinderMesh.Succeeded())
+	{
+		CollarMesh->SetStaticMesh(CylinderMesh.Object);
+	}
 
 	AttackRangeSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AttackRangeSphere"));
 	AttackRangeSphere->SetupAttachment(SceneRoot);
@@ -94,10 +110,34 @@ void ADefenderBase::BeginPlay()
 		HealthComponent->OnDamaged.AddUniqueDynamic(this, &ThisClass::HandleDamaged);
 	}
 
+	if (MeshComponent)
+	{
+		BaseMeshScale = MeshComponent->GetRelativeScale3D();
+	}
+
 	ApplyBodyColor();
 	SetupHealthBar();
 	StartAttackTimer();
+
+	if (const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+	{
+		SyncUpgradesToTier(GameState->GetUpgradeTier(TowerDefenseUpgrade::TrackFromDefenderKind(DefenderKind)));
+	}
+
 	UE_LOG(LogTowerDefense, Log, TEXT("Defender '%s' placed at %s."), *GetName(), *GetActorLocation().ToCompactString());
+}
+
+void ADefenderBase::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (BodyMaterialInstance && GetWorld())
+	{
+		BodyMaterialInstance->SetScalarParameterValue(TEXT("Time"), GetWorld()->GetTimeSeconds());
+		BodyMaterialInstance->SetScalarParameterValue(TEXT("SwayAmount"), VisualSwayAmount);
+		BodyMaterialInstance->SetScalarParameterValue(TEXT("SwaySpeed"), 1.6f + AppliedUpgradeTier * 0.35f);
+		BodyMaterialInstance->SetScalarParameterValue(TEXT("UpgradeTier"), static_cast<float>(AppliedUpgradeTier));
+	}
 }
 
 void ADefenderBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -305,13 +345,12 @@ void ADefenderBase::PlayDamageFlash()
 
 void ADefenderBase::RestoreBodyColor()
 {
-	if (!BodyMaterialInstance)
-	{
-		return;
-	}
-
-	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), BodyColor);
-	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), BodyColor);
+	JungleVisuals::UpdateDynamicMaterial(
+		BodyMaterialInstance,
+		BodyColor,
+		AppliedUpgradeTier,
+		VisualSwayAmount,
+		GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f);
 }
 
 void ADefenderBase::ApplyBodyColor()
@@ -321,17 +360,91 @@ void ADefenderBase::ApplyBodyColor()
 		return;
 	}
 
-	UMaterialInterface* SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-	if (!SourceMaterial)
+	BodyMaterialInstance = JungleVisuals::ApplyBodyMaterial(
+		MeshComponent,
+		this,
+		BodyColor,
+		AppliedUpgradeTier,
+		VisualSwayAmount);
+}
+
+void ADefenderBase::ApplyUpgradeStep(int32 TierIndex)
+{
+	if (TierIndex != AppliedUpgradeTier + 1)
 	{
 		return;
 	}
 
-	BodyMaterialInstance = UMaterialInstanceDynamic::Create(SourceMaterial, this);
-	if (BodyMaterialInstance)
+	const FUpgradeStep* Step = TowerDefenseUpgrade::GetStep(TowerDefenseUpgrade::TrackFromDefenderKind(DefenderKind), TierIndex);
+	if (!Step)
 	{
-		RestoreBodyColor();
-		MeshComponent->SetMaterial(0, BodyMaterialInstance);
+		return;
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->IncreaseMaxHealth(Step->BonusMaxHealth, true);
+		MaxHealth = HealthComponent->GetMaxHealth();
+	}
+
+	AttackDamage += Step->BonusDamage;
+	AttackCooldown = FMath::Max(AttackCooldown * Step->CooldownMultiplier, 0.1f);
+	AttackRange += Step->BonusRange;
+	if (AttackRangeSphere)
+	{
+		AttackRangeSphere->SetSphereRadius(AttackRange);
+	}
+
+	BodyColor = Step->Color;
+	BaseMeshScale *= Step->ScaleMultiplier;
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(BaseMeshScale);
+		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+	}
+
+	AppliedUpgradeTier = TierIndex;
+	ApplyKindSpecificUpgrade(TierIndex);
+	ApplyBodyColor();
+	StartAttackTimer();
+	RefreshUpgradeVisuals();
+	JungleVisuals::SpawnUpgradeBloom(GetWorld(), GetActorLocation() + FVector(0.0f, 0.0f, 80.0f));
+}
+
+void ADefenderBase::SyncUpgradesToTier(int32 GlobalTier)
+{
+	const int32 TargetTier = FMath::Clamp(GlobalTier, 0, TowerDefenseUpgrade::GetMaxTier());
+	while (AppliedUpgradeTier < TargetTier)
+	{
+		ApplyUpgradeStep(AppliedUpgradeTier + 1);
+	}
+}
+
+void ADefenderBase::ApplyKindSpecificUpgrade(int32 TierIndex)
+{
+	if (DefenderKind == EDefenderKind::JungleScout && TierIndex >= 2)
+	{
+		EnsureCollarMesh();
+	}
+}
+
+void ADefenderBase::EnsureCollarMesh()
+{
+	if (!CollarMesh)
+	{
+		return;
+	}
+
+	CollarMesh->SetHiddenInGame(false);
+	CollarMesh->SetVisibility(true);
+	JungleVisuals::ApplyBodyMaterial(CollarMesh, this, FLinearColor(0.82f, 0.66f, 0.14f, 1.0f), AppliedUpgradeTier, 0.0f);
+}
+
+void ADefenderBase::RefreshUpgradeVisuals()
+{
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(BaseMeshScale);
 	}
 }
 

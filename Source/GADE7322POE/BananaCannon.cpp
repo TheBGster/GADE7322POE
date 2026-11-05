@@ -7,6 +7,7 @@
 #include "HealthComponent.h"
 #include "Math/NumericLimits.h"
 #include "TimerManager.h"
+#include "TowerDefenseUpgrade.h"
 #include "UObject/ConstructorHelpers.h"
 
 ABananaCannon::ABananaCannon()
@@ -97,7 +98,8 @@ void ABananaCannon::AttackTarget()
 	ABananaProjectile* Projectile = GetWorld()->SpawnActor<ABananaProjectile>(ClassToSpawn, SpawnLocation, FRotator::ZeroRotator);
 	if (IsValid(Projectile))
 	{
-		Projectile->InitialiseProjectile(Target, this, AttackDamage, ProjectileSpeed);
+		const float ProjectileScale = AppliedUpgradeTier >= 2 ? 1.45f : 1.0f;
+		Projectile->InitialiseProjectile(Target, this, AttackDamage, ProjectileSpeed, ProjectileScale);
 	}
 
 	if (MeshComponent)
@@ -115,6 +117,22 @@ void ABananaCannon::AttackTarget()
 
 void ABananaCannon::ResetFireVisual()
 {
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(RestingMeshScale);
+	}
+}
+
+void ABananaCannon::ApplyKindSpecificUpgrade(int32 TierIndex)
+{
+	const FUpgradeStep* Step = TowerDefenseUpgrade::GetStep(EUpgradeTrack::BananaCannon, TierIndex);
+	if (!Step)
+	{
+		return;
+	}
+
+	ProjectileSpeed += Step->BonusProjectileSpeed;
+	RestingMeshScale = BaseMeshScale;
 	if (MeshComponent)
 	{
 		MeshComponent->SetRelativeScale3D(RestingMeshScale);

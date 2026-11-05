@@ -31,9 +31,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tower")
 	void StopCombat();
 
+	UFUNCTION(BlueprintPure, Category = "Tower|Upgrades")
+	int32 GetAppliedUpgradeTier() const { return AppliedUpgradeTier; }
+
+	void ApplyUpgradeStep(int32 TierIndex);
+	void SyncUpgradesToTier(int32 GlobalTier);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaTime) override;
 
 	UFUNCTION()
 	void FindTarget();
@@ -59,12 +66,17 @@ protected:
 	void StartAttackTimer();
 	void SyncHealthToGameState() const;
 	void ApplyTowerMaterial();
+	void RefreshUpgradeVisuals();
+	void EnsureCanopyRing();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<USceneComponent> SceneRoot;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower|Upgrades")
+	TObjectPtr<UStaticMeshComponent> CanopyRingMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<USphereComponent> AttackRangeSphere;
@@ -102,4 +114,7 @@ protected:
 
 	FTimerHandle AttackTimerHandle;
 	TArray<TWeakObjectPtr<AActor>> TargetsInRange;
+	FVector BaseMeshScale;
+	int32 AppliedUpgradeTier;
+	float VisualSwayAmount;
 };

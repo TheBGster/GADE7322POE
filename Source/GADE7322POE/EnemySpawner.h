@@ -103,4 +103,5 @@ protected:
 	mutable int32 CachedResources;
 	mutable int32 CachedEnemiesDefeated;
 	mutable float CachedDefenseDPS;
+	mutable int32 CachedUpgradePower;
 };

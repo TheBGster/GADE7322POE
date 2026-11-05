@@ -57,9 +57,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Defender")
 	UStaticMeshComponent* GetMeshComponent() const { return MeshComponent; }
 
+	UFUNCTION(BlueprintPure, Category = "Defender|Upgrades")
+	int32 GetAppliedUpgradeTier() const { return AppliedUpgradeTier; }
+
+	void ApplyUpgradeStep(int32 TierIndex);
+	void SyncUpgradesToTier(int32 GlobalTier);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaTime) override;
+	virtual void ApplyKindSpecificUpgrade(int32 TierIndex);
 
 	UFUNCTION()
 	virtual void FindTarget();
@@ -86,12 +94,17 @@ protected:
 	void SetupHealthBar();
 	void PlayDamageFlash();
 	void RestoreBodyColor();
+	void RefreshUpgradeVisuals();
+	void EnsureCollarMesh();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<USceneComponent> SceneRoot;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender|Upgrades")
+	TObjectPtr<UStaticMeshComponent> CollarMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<USphereComponent> AttackRangeSphere;
@@ -136,4 +149,7 @@ protected:
 	FTimerHandle DamageFlashTimerHandle;
 	TArray<TWeakObjectPtr<AActor>> TargetsInRange;
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterialInstance;
+	FVector BaseMeshScale;
+	int32 AppliedUpgradeTier;
+	float VisualSwayAmount;
 };

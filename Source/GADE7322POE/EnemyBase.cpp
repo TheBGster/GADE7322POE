@@ -10,6 +10,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -37,6 +38,8 @@ AEnemyBase::AEnemyBase()
 	EnemyKind = EEnemyKind::JungleScout;
 	DisplayName = FText::FromString(TEXT("Jungle Scout"));
 	BodyColor = FLinearColor(0.18f, 0.38f, 0.16f, 1.0f);
+	CharacterMeshTargetHeight = 90.0f;
+	CharacterMeshYawOffset = 0.0f;
 	SlowMultiplier = 1.0f;
 	SpeedBurstMultiplier = 1.0f;
 
@@ -52,14 +55,23 @@ AEnemyBase::AEnemyBase()
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
 	MeshComponent->SetGenerateOverlapEvents(true);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube"));
-	if (CubeMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> MonkeyMesh(TEXT("/Game/Fab/low_poly_chimp/chimp.chimp"));
+	if (MonkeyMesh.Succeeded())
 	{
-		MeshComponent->SetStaticMesh(CubeMesh.Object);
+		CharacterMesh = MonkeyMesh.Object;
 	}
 
-	MeshComponent->SetRelativeScale3D(FVector(0.55f, 0.55f, 0.8f));
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 40.0f));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube"));
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+	}
+	else if (CubeMesh.Succeeded())
+	{
+		MeshComponent->SetStaticMesh(CubeMesh.Object);
+		MeshComponent->SetRelativeScale3D(FVector(0.55f, 0.55f, 0.8f));
+		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 40.0f));
+	}
 
 	AttackRangeSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AttackRangeSphere"));
 	AttackRangeSphere->SetupAttachment(SceneRoot);
@@ -103,6 +115,11 @@ void AEnemyBase::BeginPlay()
 		HealthComponent->OnDamaged.AddUniqueDynamic(this, &ThisClass::HandleDamaged);
 	}
 
+	EnsureCharacterMeshLoaded();
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+	}
 	ApplyBodyColor();
 	SetupHealthBar();
 	StartAttackTimer();
@@ -515,13 +532,7 @@ void AEnemyBase::HandleDamaged(float DamageAmount, AActor* DamageCauser, AContro
 
 void AEnemyBase::PlayDamageFlash()
 {
-	if (!BodyMaterialInstance)
-	{
-		return;
-	}
-
-	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.95f, 0.15f, 0.10f, 1.0f));
-	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), FLinearColor(0.95f, 0.15f, 0.10f, 1.0f));
+	ApplyMaterialTint(FLinearColor(0.95f, 0.15f, 0.10f, 1.0f));
 
 	if (UWorld* World = GetWorld())
 	{
@@ -532,16 +543,17 @@ void AEnemyBase::PlayDamageFlash()
 
 void AEnemyBase::RestoreBodyColor()
 {
-	if (!BodyMaterialInstance)
+	if (CharacterMesh)
 	{
+		ApplyMaterialTint(IsSlowed()
+			? FLinearColor(0.45f, 0.80f, 1.0f, 1.0f)
+			: FLinearColor::White);
 		return;
 	}
 
-	const FLinearColor Color = IsSlowed()
+	ApplyMaterialTint(IsSlowed()
 		? FLinearColor(0.35f, 0.75f, 0.95f, 1.0f)
-		: BodyColor;
-	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);
-	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), Color);
+		: BodyColor);
 }
 
 void AEnemyBase::ApplyBodyColor()
@@ -551,7 +563,17 @@ void AEnemyBase::ApplyBodyColor()
 		return;
 	}
 
-	UMaterialInterface* SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	UMaterialInterface* SourceMaterial = MeshComponent->GetMaterial(0);
+	if (!SourceMaterial && CharacterMesh)
+	{
+		SourceMaterial = CharacterMesh->GetMaterial(0);
+	}
+
+	if (!CharacterMesh)
+	{
+		SourceMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	}
+
 	if (!SourceMaterial)
 	{
 		return;
@@ -562,6 +584,58 @@ void AEnemyBase::ApplyBodyColor()
 	{
 		RestoreBodyColor();
 		MeshComponent->SetMaterial(0, BodyMaterialInstance);
+	}
+}
+
+void AEnemyBase::ApplyMaterialTint(const FLinearColor& Color)
+{
+	if (!BodyMaterialInstance)
+	{
+		return;
+	}
+
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("BaseColor"), Color);
+	BodyMaterialInstance->SetVectorParameterValue(TEXT("DiffuseColor"), Color);
+}
+
+const TCHAR* AEnemyBase::GetCharacterMeshPath() const
+{
+	return TEXT("/Game/Fab/low_poly_chimp/chimp.chimp");
+}
+
+void AEnemyBase::EnsureCharacterMeshLoaded()
+{
+	if (CharacterMesh)
+	{
+		return;
+	}
+
+	CharacterMesh = LoadObject<UStaticMesh>(nullptr, GetCharacterMeshPath());
+}
+
+void AEnemyBase::SetupCharacterMesh()
+{
+	if (!MeshComponent || !CharacterMesh)
+	{
+		return;
+	}
+
+	MeshComponent->SetStaticMesh(CharacterMesh);
+
+	const FBoxSphereBounds Bounds = CharacterMesh->GetBounds();
+	const float MeshHeight = FMath::Max(Bounds.BoxExtent.Z * 2.0f, 1.0f);
+	const float Scale = CharacterMeshTargetHeight / MeshHeight;
+	MeshComponent->SetRelativeScale3D(FVector(Scale));
+	MeshComponent->SetRelativeRotation(FRotator(0.0f, CharacterMeshYawOffset, 0.0f));
+
+	const float BottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -BottomZ));
+
+	if (HealthBarComponent)
+	{
+		const float TopZ = (Bounds.Origin.Z + Bounds.BoxExtent.Z) * Scale + 18.0f;
+		HealthBarComponent->SetRelativeLocation(FVector(0.0f, 0.0f, TopZ));
 	}
 }
 
