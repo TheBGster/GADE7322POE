@@ -45,6 +45,9 @@ protected:
 	void HandleWaveChanged(int32 NewWave, int32 EnemiesInWave);
 
 	UFUNCTION()
+	void HandleWaveCleared(int32 WaveNumber, int32 BonusResources);
+
+	UFUNCTION()
 	void HandleSelectedDefenderChanged(EDefenderKind Kind, int32 Cost);
 
 	UFUNCTION()

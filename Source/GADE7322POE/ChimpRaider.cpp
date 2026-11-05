@@ -14,7 +14,7 @@ AChimpRaider::AChimpRaider()
 	AttackDamage = 5.0f;
 	AttackRange = 150.0f;
 	AttackCooldown = 0.7f;
-	ResourceReward = 8;
+	ResourceReward = 16;
 	DamagedSpeedBurstMultiplier = 1.45f;
 	DamagedSpeedBurstDuration = 1.1f;
 	Tags.AddUnique(TowerDefenseTags::ChimpRaider);

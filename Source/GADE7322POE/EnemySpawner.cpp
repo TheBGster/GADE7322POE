@@ -24,6 +24,7 @@ AEnemySpawner::AEnemySpawner()
 	NextSpawnIndex = 0;
 	CurrentWaveNumber = 0;
 	bWaveSpawnComplete = false;
+	bWaveClearBonusGranted = false;
 	EnemyClass = AEnemyBase::StaticClass();
 	GorillaBruteClass = AGorillaBrute::StaticClass();
 	ChimpRaiderClass = AChimpRaider::StaticClass();
@@ -107,6 +108,7 @@ void AEnemySpawner::StartNextWave()
 	BuildCurrentWave();
 	NextSpawnIndex = 0;
 	bWaveSpawnComplete = false;
+	bWaveClearBonusGranted = false;
 
 	if (ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
 	{
@@ -431,6 +433,20 @@ void AEnemySpawner::CheckWaveComplete()
 	{
 		ScheduleNextSpawn(1.0f);
 		return;
+	}
+
+	if (!bWaveClearBonusGranted)
+	{
+		bWaveClearBonusGranted = true;
+		if (ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr)
+		{
+			GameState->HandleWaveCleared(CurrentWaveNumber);
+		}
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
 	}
 
 	ScheduleNextWave(GetInterWaveDelay());

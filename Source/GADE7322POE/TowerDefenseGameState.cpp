@@ -11,13 +11,16 @@ ATowerDefenseGameState::ATowerDefenseGameState()
 	DefenderCost = 25;
 	BananaCannonCost = 50;
 	VineTrapCost = 35;
-	EnemyKillReward = 10;
+	EnemyKillReward = 20;
+	WaveClearBaseBonus = 25;
+	WaveClearBonusPerWave = 15;
 	CurrentResources = StartingResources;
 	TowerMaxHealth = 0.0f;
 	TowerCurrentHealth = 0.0f;
 	MatchState = ETowerDefenseMatchState::WaitingToStart;
 	CurrentWave = 0;
 	EnemiesDefeated = 0;
+	LastClearedWave = 0;
 	TowerUpgradeTier = 0;
 	ScoutUpgradeTier = 0;
 	CannonUpgradeTier = 0;
@@ -32,6 +35,7 @@ void ATowerDefenseGameState::ResetForNewGame()
 	MatchState = ETowerDefenseMatchState::WaitingToStart;
 	CurrentWave = 0;
 	EnemiesDefeated = 0;
+	LastClearedWave = 0;
 	TowerUpgradeTier = 0;
 	ScoutUpgradeTier = 0;
 	CannonUpgradeTier = 0;
@@ -124,6 +128,30 @@ void ATowerDefenseGameState::HandleEnemyKilled(int32 RewardOverride)
 		AddResources(Reward);
 	}
 	UE_LOG(LogTowerDefense, Log, TEXT("Enemy kill reward applied. +%d  Defeated: %d"), Reward, EnemiesDefeated);
+}
+
+int32 ATowerDefenseGameState::GetWaveClearBonus(int32 WaveNumber) const
+{
+	const int32 SafeWave = FMath::Max(WaveNumber, 1);
+	return WaveClearBaseBonus + WaveClearBonusPerWave * SafeWave;
+}
+
+void ATowerDefenseGameState::HandleWaveCleared(int32 WaveNumber)
+{
+	if (MatchState != ETowerDefenseMatchState::InProgress || WaveNumber <= 0 || WaveNumber == LastClearedWave)
+	{
+		return;
+	}
+
+	LastClearedWave = WaveNumber;
+	const int32 Bonus = GetWaveClearBonus(WaveNumber);
+	if (Bonus > 0)
+	{
+		AddResources(Bonus);
+	}
+
+	OnWaveCleared.Broadcast(WaveNumber, Bonus);
+	UE_LOG(LogTowerDefense, Log, TEXT("Wave %d cleared. Bonus +%d resources."), WaveNumber, Bonus);
 }
 
 int32 ATowerDefenseGameState::GetDefenderCostForKind(EDefenderKind Kind) const

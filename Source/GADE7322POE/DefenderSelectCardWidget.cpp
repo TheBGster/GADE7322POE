@@ -3,6 +3,7 @@
 #include "DefenderSelectCardWidget.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefensePlayerController.h"
+#include "UIAudio.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -81,6 +82,7 @@ void UDefenderSelectCardWidget::BuildDefaultLayout()
 	Style.SetPressed(Pressed);
 	Style.SetDisabled(Disabled);
 	SelectButton->SetStyle(Style);
+	UIAudio::BindButtonPressSound(SelectButton);
 
 	UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("CardContent"));
 	if (UButtonSlot* ButtonSlot = Cast<UButtonSlot>(SelectButton->AddChild(Content)))

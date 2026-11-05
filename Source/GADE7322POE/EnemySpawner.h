@@ -95,6 +95,7 @@ protected:
 	mutable int32 NextPathIndex;
 	int32 NextSpawnIndex;
 	bool bWaveSpawnComplete;
+	bool bWaveClearBonusGranted;
 
 	mutable int32 CachedScoutCount;
 	mutable int32 CachedCannonCount;

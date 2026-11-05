@@ -4,6 +4,7 @@
 #include "GADE7322POE.h"
 #include "TowerDefenseGameMode.h"
 #include "TowerDefensePlayerController.h"
+#include "UIAudio.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/BorderSlot.h"
@@ -117,6 +118,7 @@ UButton* UPauseMenuWidget::MakeMenuButton(FName Name, const FText& Label, const 
 	ButtonLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
 	ButtonLabel->SetFont(FCoreStyle::GetDefaultFontStyle("Bold", 22));
 	Button->AddChild(ButtonLabel);
+	UIAudio::BindButtonPressSound(Button);
 	return Button;
 }
 

@@ -30,7 +30,7 @@ AEnemyBase::AEnemyBase()
 	AttackDamage = 8.0f;
 	AttackRange = 180.0f;
 	AttackCooldown = 1.0f;
-	ResourceReward = 10;
+	ResourceReward = 20;
 	CurrentWaypointIndex = 0;
 	BehaviorState = EEnemyBehaviorState::Moving;
 	bHasReachedDestination = false;
@@ -39,7 +39,7 @@ AEnemyBase::AEnemyBase()
 	DisplayName = FText::FromString(TEXT("Jungle Scout"));
 	BodyColor = FLinearColor(0.18f, 0.38f, 0.16f, 1.0f);
 	CharacterMeshTargetHeight = 90.0f;
-	CharacterMeshYawOffset = 0.0f;
+	CharacterMeshYawOffset = -90.0f;
 	SlowMultiplier = 1.0f;
 	SpeedBurstMultiplier = 1.0f;
 

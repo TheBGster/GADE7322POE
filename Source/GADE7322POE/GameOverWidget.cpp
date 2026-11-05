@@ -3,6 +3,7 @@
 #include "GameOverWidget.h"
 #include "GADE7322POE.h"
 #include "TowerDefenseGameMode.h"
+#include "UIAudio.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/BorderSlot.h"
@@ -82,6 +83,7 @@ void UGameOverWidget::BuildDefaultLayout()
 	RestartLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
 	RestartLabel->SetFont(FCoreStyle::GetDefaultFontStyle("Bold", 22));
 	RestartButton->AddChild(RestartLabel);
+	UIAudio::BindButtonPressSound(RestartButton);
 
 	USizeBox* ButtonSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("RestartButtonSize"));
 	ButtonSize->SetWidthOverride(240.0f);

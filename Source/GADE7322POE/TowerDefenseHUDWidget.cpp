@@ -238,6 +238,7 @@ void UTowerDefenseHUDWidget::BindToGameState()
 	GameState->OnResourcesChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleResourcesChanged);
 	GameState->OnTowerHealthChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleTowerHealthChanged);
 	GameState->OnWaveChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleWaveChanged);
+	GameState->OnWaveCleared.AddDynamic(this, &UTowerDefenseHUDWidget::HandleWaveCleared);
 	GameState->OnUpgradeChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleUpgradeChanged);
 	GameState->OnChronicleChanged.AddDynamic(this, &UTowerDefenseHUDWidget::HandleChronicleChanged);
 }
@@ -249,6 +250,7 @@ void UTowerDefenseHUDWidget::UnbindFromGameState()
 		GameState->OnResourcesChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleResourcesChanged);
 		GameState->OnTowerHealthChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleTowerHealthChanged);
 		GameState->OnWaveChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleWaveChanged);
+		GameState->OnWaveCleared.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleWaveCleared);
 		GameState->OnUpgradeChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleUpgradeChanged);
 		GameState->OnChronicleChanged.RemoveDynamic(this, &UTowerDefenseHUDWidget::HandleChronicleChanged);
 	}
@@ -317,6 +319,16 @@ void UTowerDefenseHUDWidget::HandleWaveChanged(int32 NewWave, int32 EnemiesInWav
 	const int32 Defeated = GameState ? GameState->GetEnemiesDefeated() : 0;
 	UpdateWaveDisplay(NewWave, EnemiesInWave, Defeated);
 	UpdateChronicleDisplay();
+}
+
+void UTowerDefenseHUDWidget::HandleWaveCleared(int32 WaveNumber, int32 BonusResources)
+{
+	ShowPlacementFeedback(
+		FText::Format(
+			NSLOCTEXT("TowerDefense", "WaveClearBonusHUD", "Wave {0} cleared!  +{1} resources"),
+			FText::AsNumber(WaveNumber),
+			FText::AsNumber(BonusResources)),
+		FLinearColor(0.98f, 0.82f, 0.22f));
 }
 
 void UTowerDefenseHUDWidget::HandleUpgradeChanged(EUpgradeTrack Track, int32 NewTier)

@@ -19,6 +19,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchStateChanged, ETowerDefenseM
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewResourceAmount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTowerHealthChanged, float, CurrentHealth, float, MaxHealth);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaveChanged, int32, NewWave, int32, EnemiesInWave);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaveCleared, int32, WaveNumber, int32, BonusResources);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnUpgradeChanged, EUpgradeTrack, Track, int32, NewTier);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnChronicleChanged);
 
@@ -42,6 +43,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
 	FOnWaveChanged OnWaveChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
+	FOnWaveCleared OnWaveCleared;
 
 	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
 	FOnUpgradeChanged OnUpgradeChanged;
@@ -84,6 +88,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
 	int32 GetEnemyKillReward() const { return EnemyKillReward; }
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
+	int32 GetWaveClearBonus(int32 WaveNumber) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Waves")
+	void HandleWaveCleared(int32 WaveNumber);
 
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Resources")
 	bool CanAfford(int32 Cost) const;
@@ -157,6 +167,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
 	int32 EnemyKillReward;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
+	int32 WaveClearBaseBonus;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
+	int32 WaveClearBonusPerWave;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources")
 	int32 CurrentResources;
 
@@ -174,6 +190,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Waves")
 	int32 EnemiesDefeated;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Waves")
+	int32 LastClearedWave;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Upgrades")
 	int32 TowerUpgradeTier;

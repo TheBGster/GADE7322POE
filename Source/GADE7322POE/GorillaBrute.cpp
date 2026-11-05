@@ -20,11 +20,12 @@ AGorillaBrute::AGorillaBrute()
 	AttackDamage = 18.0f;
 	AttackRange = 200.0f;
 	AttackCooldown = 1.35f;
-	ResourceReward = 18;
+	ResourceReward = 35;
 	DefenderSmashMultiplier = 1.35f;
 	Tags.AddUnique(TowerDefenseTags::GorillaBrute);
 
 	CharacterMeshTargetHeight = 160.0f;
+	CharacterMeshYawOffset = -90.0f;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> GorillaMesh(TEXT("/Game/Fab/Realistic_Black_Gorilla_Free_Low_Poly/gfree/StaticMeshes/gfree.gfree"));
 	if (GorillaMesh.Succeeded())

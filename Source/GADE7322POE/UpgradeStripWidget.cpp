@@ -4,6 +4,7 @@
 #include "TowerDefenseGameState.h"
 #include "TowerDefensePlayerController.h"
 #include "TowerDefenseUpgrade.h"
+#include "UIAudio.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -107,6 +108,7 @@ UButton* UUpgradeStripWidget::MakeUpgradeButton(FName Name, TObjectPtr<UTextBloc
 	OutLabel->SetFont(FCoreStyle::GetDefaultFontStyle("Regular", 12));
 	OutLabel->SetAutoWrapText(true);
 	Button->AddChild(OutLabel);
+	UIAudio::BindButtonPressSound(Button);
 	return Button;
 }
 
