@@ -85,6 +85,9 @@ protected:
 
 	void ConfigureInstancer(UHierarchicalInstancedStaticMeshComponent* Instancer, UStaticMesh* Mesh) const;
 	UMaterialInterface* GetSourceTileMaterial() const;
+	UMaterialInterface* LoadTerrainMaterial(const TCHAR* Path) const;
+	void PrepareMaterialForInstancing(UMaterialInterface* Material) const;
+	void ApplyInstancerMaterial(UHierarchicalInstancedStaticMeshComponent* Instancer, UMaterialInterface* Material, TObjectPtr<UMaterialInstanceDynamic>& MaterialInstance);
 	void SetInstancerColor(UHierarchicalInstancedStaticMeshComponent* Instancer, TObjectPtr<UMaterialInstanceDynamic>& MaterialInstance, const FLinearColor& Color);
 	int32 ChooseHeightLevel(int32 X, int32 Y) const;
 	ETerrainTileType ChooseTileType(int32 HeightLevel) const;
@@ -219,6 +222,12 @@ protected:
 	/** Optional parent material. If empty, Engine BasicShapeMaterial is used. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
 	TObjectPtr<UMaterialInterface> BaseTileMaterial;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
+	TObjectPtr<UMaterialInterface> GroundTileMaterial;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
+	TObjectPtr<UMaterialInterface> PathTileMaterial;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Terrain|Materials")
 	FLinearColor GroundColor;

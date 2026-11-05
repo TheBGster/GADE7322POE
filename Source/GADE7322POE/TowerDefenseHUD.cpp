@@ -3,6 +3,7 @@
 #include "TowerDefenseHUD.h"
 #include "GameOverWidget.h"
 #include "PauseMenuWidget.h"
+#include "StartMenuWidget.h"
 #include "TowerDefenseHUDWidget.h"
 #include "GADE7322POE.h"
 #include "Blueprint/UserWidget.h"
@@ -14,6 +15,7 @@ ATowerDefenseHUD::ATowerDefenseHUD()
 	HUDWidgetClass = UTowerDefenseHUDWidget::StaticClass();
 	GameOverWidgetClass = UGameOverWidget::StaticClass();
 	PauseMenuWidgetClass = UPauseMenuWidget::StaticClass();
+	StartMenuWidgetClass = UStartMenuWidget::StaticClass();
 }
 
 void ATowerDefenseHUD::BeginPlay()
@@ -74,6 +76,15 @@ void ATowerDefenseHUD::CreateWidgets()
 		PauseMenuWidget->HidePauseMenu();
 		UE_LOG(LogTowerDefense, Log, TEXT("Pause menu widget added to viewport."));
 	}
+
+	UClass* StartClassToUse = StartMenuWidgetClass ? StartMenuWidgetClass.Get() : UStartMenuWidget::StaticClass();
+	StartMenuWidget = CreateWidget<UStartMenuWidget>(PlayerController, StartClassToUse);
+	if (StartMenuWidget)
+	{
+		StartMenuWidget->AddToViewport(12);
+		StartMenuWidget->HideStartMenu();
+		UE_LOG(LogTowerDefense, Log, TEXT("Start menu widget added to viewport."));
+	}
 }
 
 void ATowerDefenseHUD::RemoveWidgets()
@@ -94,6 +105,12 @@ void ATowerDefenseHUD::RemoveWidgets()
 	{
 		PauseMenuWidget->RemoveFromParent();
 		PauseMenuWidget = nullptr;
+	}
+
+	if (StartMenuWidget)
+	{
+		StartMenuWidget->RemoveFromParent();
+		StartMenuWidget = nullptr;
 	}
 }
 
@@ -133,6 +150,27 @@ void ATowerDefenseHUD::HandleMatchStateChanged(ETowerDefenseMatchState NewState)
 
 void ATowerDefenseHUD::ApplyMatchState(ETowerDefenseMatchState NewState)
 {
+	if (NewState == ETowerDefenseMatchState::WaitingToStart)
+	{
+		HidePauseMenu();
+		if (GameOverWidget)
+		{
+			GameOverWidget->HideGameOver();
+		}
+		if (HUDWidget)
+		{
+			HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		ShowStartMenu();
+		return;
+	}
+
+	HideStartMenu();
+	if (HUDWidget)
+	{
+		HUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+
 	if (NewState == ETowerDefenseMatchState::GameOver)
 	{
 		HidePauseMenu();
@@ -221,6 +259,48 @@ void ATowerDefenseHUD::HidePauseMenu()
 bool ATowerDefenseHUD::IsPauseMenuVisible() const
 {
 	return PauseMenuWidget && PauseMenuWidget->IsPauseMenuVisible();
+}
+
+void ATowerDefenseHUD::ShowStartMenu()
+{
+	if (StartMenuWidget)
+	{
+		StartMenuWidget->ShowStartMenu();
+	}
+
+	SetStartMenuInputMode();
+}
+
+void ATowerDefenseHUD::HideStartMenu()
+{
+	if (StartMenuWidget)
+	{
+		StartMenuWidget->HideStartMenu();
+	}
+}
+
+bool ATowerDefenseHUD::IsStartMenuVisible() const
+{
+	return StartMenuWidget && StartMenuWidget->IsStartMenuVisible();
+}
+
+void ATowerDefenseHUD::SetStartMenuInputMode()
+{
+	APlayerController* PlayerController = GetOwningPlayerController();
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	FInputModeUIOnly InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	if (StartMenuWidget)
+	{
+		InputMode.SetWidgetToFocus(StartMenuWidget->TakeWidget());
+	}
+
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->bShowMouseCursor = true;
 }
 
 void ATowerDefenseHUD::SetPauseInputMode()

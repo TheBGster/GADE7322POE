@@ -240,7 +240,7 @@ void ATowerDefensePlayerController::TogglePauseMenu()
 void ATowerDefensePlayerController::PauseGame()
 {
 	const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
-	if (GameState && GameState->GetMatchState() == ETowerDefenseMatchState::GameOver)
+	if (GameState && (GameState->GetMatchState() == ETowerDefenseMatchState::GameOver || GameState->GetMatchState() == ETowerDefenseMatchState::WaitingToStart))
 	{
 		return;
 	}
@@ -491,6 +491,12 @@ bool ATowerDefensePlayerController::CanAffordSelected() const
 void ATowerDefensePlayerController::HandleSelectPressed()
 {
 	if (bIsPauseMenuOpen || IsCursorOverInteractiveWidget())
+	{
+		return;
+	}
+
+	const ATowerDefenseGameState* GameState = GetWorld() ? GetWorld()->GetGameState<ATowerDefenseGameState>() : nullptr;
+	if (!GameState || !GameState->IsMatchInProgress())
 	{
 		return;
 	}

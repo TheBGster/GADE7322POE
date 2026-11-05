@@ -18,6 +18,7 @@ public:
 protected:
 	virtual bool ShouldKeepMovingWhileAttacking() const override { return true; }
 	virtual void AttackTarget() override;
+	virtual const TCHAR* GetCharacterMeshPath() const override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enemy|Combat", meta = (ClampMin = "1.0"))
 	float DefenderSmashMultiplier;

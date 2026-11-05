@@ -10,6 +10,7 @@
 class UTowerDefenseHUDWidget;
 class UGameOverWidget;
 class UPauseMenuWidget;
+class UStartMenuWidget;
 
 
 UCLASS()
@@ -32,6 +33,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|UI")
 	bool IsPauseMenuVisible() const;
 
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
+	void ShowStartMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|UI")
+	void HideStartMenu();
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|UI")
+	bool IsStartMenuVisible() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -48,6 +58,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
 	TSubclassOf<UPauseMenuWidget> PauseMenuWidgetClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
+	TSubclassOf<UStartMenuWidget> StartMenuWidgetClass;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
 	TObjectPtr<UTowerDefenseHUDWidget> HUDWidget;
 
@@ -57,6 +70,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
 	TObjectPtr<UPauseMenuWidget> PauseMenuWidget;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|UI")
+	TObjectPtr<UStartMenuWidget> StartMenuWidget;
+
 	void CreateWidgets();
 	void RemoveWidgets();
 	void BindToGameState();
@@ -65,6 +81,7 @@ protected:
 	void SetGameplayInputMode();
 	void SetGameOverInputMode();
 	void SetPauseInputMode();
+	void SetStartMenuInputMode();
 
 	TWeakObjectPtr<ATowerDefenseGameState> BoundGameState;
 };

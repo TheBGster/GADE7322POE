@@ -11,7 +11,9 @@
 #include "EnemyBase.h"
 #include "BananaProjectile.h"
 #include "DefenderPlacementPreview.h"
+#include "JungleBurstEffect.h"
 #include "EnemySpawner.h"
+#include "GroveChronicleGenerator.h"
 #include "HealthTestActor.h"
 #include "GADE7322POE.h"
 #include "GameFramework/DefaultPawn.h"
@@ -31,7 +33,15 @@ ATowerDefenseGameMode::ATowerDefenseGameMode()
 void ATowerDefenseGameMode::StartPlay()
 {
 	Super::StartPlay();
-	StartNewGame();
+
+	if (ATowerDefenseGameState* TDGameState = GetTowerDefenseGameState())
+	{
+		TDGameState->SetMatchState(ETowerDefenseMatchState::WaitingToStart);
+	}
+
+	GenerateWorldTerrain();
+	MovePlayerToTerrainOverview();
+	UE_LOG(LogTowerDefense, Log, TEXT("Start screen ready. Waiting for Play."));
 }
 
 void ATowerDefenseGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -66,6 +76,13 @@ void ATowerDefenseGameMode::StartNewGame()
 	TDGameState->SetMatchState(ETowerDefenseMatchState::InProgress);
 
 	GenerateWorldTerrain();
+	if (IsValid(TerrainGenerator))
+	{
+		const FGroveChronicle Chronicle = GroveChronicleGenerator::Generate(TerrainGenerator->GetRandomSeed());
+		TDGameState->SetGroveChronicle(Chronicle);
+		UE_LOG(LogTowerDefense, Log, TEXT("Grove chronicle seeded %d: %s"),
+			Chronicle.Seed, *Chronicle.GroveName.ToString());
+	}
 	SpawnCentralTower();
 	SpawnPlacementPoints();
 	SpawnAttackTestTargets();
@@ -384,6 +401,16 @@ void ATowerDefenseGameMode::DestroyGameplayActors()
 		if (IsValid(Projectile))
 		{
 			Projectile->Destroy();
+		}
+	}
+
+	TArray<AActor*> Bursts;
+	UGameplayStatics::GetAllActorsOfClass(this, AJungleBurstEffect::StaticClass(), Bursts);
+	for (AActor* Burst : Bursts)
+	{
+		if (IsValid(Burst))
+		{
+			Burst->Destroy();
 		}
 	}
 

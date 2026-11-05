@@ -104,6 +104,24 @@ float UHealthComponent::Heal(float HealAmount)
 	return ActualHeal;
 }
 
+void UHealthComponent::IncreaseMaxHealth(float Delta, bool bHealDelta)
+{
+	if (bIsDead || Delta <= 0.0f)
+	{
+		return;
+	}
+
+	MaxHealth += Delta;
+	if (bHealDelta)
+	{
+		CurrentHealth = FMath::Min(CurrentHealth + Delta, MaxHealth);
+	}
+
+	BroadcastHealthChanged();
+	UE_LOG(LogTowerDefense, Log, TEXT("%s max health increased by %.0f. Health: %.0f / %.0f"),
+		*GetNameSafe(GetOwner()), Delta, CurrentHealth, MaxHealth);
+}
+
 float UHealthComponent::GetHealthPercent() const
 {
 	return MaxHealth > 0.0f ? CurrentHealth / MaxHealth : 0.0f;

@@ -37,6 +37,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	float Heal(float HealAmount);
 
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void IncreaseMaxHealth(float Delta, bool bHealDelta = true);
+
 	UFUNCTION(BlueprintPure, Category = "Health")
 	bool IsDead() const { return bIsDead; }
 

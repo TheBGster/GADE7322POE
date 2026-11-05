@@ -19,6 +19,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchStateChanged, ETowerDefenseM
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnResourcesChanged, int32, NewResourceAmount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTowerHealthChanged, float, CurrentHealth, float, MaxHealth);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaveChanged, int32, NewWave, int32, EnemiesInWave);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnUpgradeChanged, EUpgradeTrack, Track, int32, NewTier);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnChronicleChanged);
 
 
 UCLASS()
@@ -40,6 +42,12 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
 	FOnWaveChanged OnWaveChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
+	FOnUpgradeChanged OnUpgradeChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Tower Defense|Events")
+	FOnChronicleChanged OnChronicleChanged;
 
 	UFUNCTION(BlueprintCallable, Category = "Tower Defense")
 	void ResetForNewGame();
@@ -107,6 +115,32 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tower Defense|Tower")
 	float GetTowerMaxHealth() const { return TowerMaxHealth; }
 
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Upgrades")
+	int32 GetUpgradeTier(EUpgradeTrack Track) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Upgrades")
+	int32 GetNextUpgradeCost(EUpgradeTrack Track) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Upgrades")
+	FText GetNextUpgradeName(EUpgradeTrack Track) const;
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Upgrades")
+	bool CanBuyUpgrade(EUpgradeTrack Track) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Upgrades")
+	bool TryBuyUpgrade(EUpgradeTrack Track);
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Upgrades")
+	int32 GetTotalUpgradePower() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Tower Defense|Chronicle")
+	void SetGroveChronicle(const FGroveChronicle& InChronicle);
+
+	const FGroveChronicle& GetGroveChronicle() const { return GroveChronicle; }
+
+	UFUNCTION(BlueprintPure, Category = "Tower Defense|Chronicle")
+	FText GetCurrentWaveFlavour() const { return CurrentWaveFlavour; }
+
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower Defense|Resources", meta = (ClampMin = "0"))
 	int32 StartingResources;
@@ -140,4 +174,24 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Waves")
 	int32 EnemiesDefeated;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Upgrades")
+	int32 TowerUpgradeTier;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Upgrades")
+	int32 ScoutUpgradeTier;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Upgrades")
+	int32 CannonUpgradeTier;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Upgrades")
+	int32 TrapUpgradeTier;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Chronicle")
+	FGroveChronicle GroveChronicle;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower Defense|Chronicle")
+	FText CurrentWaveFlavour;
+
+	int32& GetUpgradeTierRef(EUpgradeTrack Track);
 };

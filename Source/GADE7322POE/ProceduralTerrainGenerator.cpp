@@ -5,6 +5,7 @@
 #include "Algo/Reverse.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Math/NumericLimits.h"
@@ -98,6 +99,18 @@ AProceduralTerrainGenerator::AProceduralTerrainGenerator()
 	if (ShapeMaterial.Succeeded())
 	{
 		BaseTileMaterial = ShapeMaterial.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> GrassMaterial(TEXT("/Game/N3D/Materials/Examples/Instances/MI_N3D_Stylized_Grass.MI_N3D_Stylized_Grass"));
+	if (GrassMaterial.Succeeded())
+	{
+		GroundTileMaterial = GrassMaterial.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> DirtMaterial(TEXT("/Game/N3D/Materials/Examples/Instances/MI_N3D_Stylized_Ground.MI_N3D_Stylized_Ground"));
+	if (DirtMaterial.Succeeded())
+	{
+		PathTileMaterial = DirtMaterial.Object;
 	}
 }
 
@@ -438,6 +451,8 @@ void AProceduralTerrainGenerator::BuildTileInstances()
 
 		Instancer->AddInstance(InstanceTransform);
 	}
+
+	ApplyTileMaterials();
 }
 
 void AProceduralTerrainGenerator::DrawPathDebug() const
@@ -526,7 +541,7 @@ void AProceduralTerrainGenerator::ConfigureInstancer(UHierarchicalInstancedStati
 
 	Instancer->ClearInstances();
 
-	if (Mesh && Instancer->GetStaticMesh() != Mesh)
+	if (Mesh)
 	{
 		Instancer->SetStaticMesh(Mesh);
 	}
@@ -534,9 +549,82 @@ void AProceduralTerrainGenerator::ConfigureInstancer(UHierarchicalInstancedStati
 
 void AProceduralTerrainGenerator::ApplyTileMaterials()
 {
-	SetInstancerColor(GroundTileInstancer, GroundMaterialInstance, GroundColor);
-	SetInstancerColor(ElevatedTileInstancer, GroundMaterialInstance, GroundColor);
-	SetInstancerColor(PathTileInstancer, PathMaterialInstance, PathColor);
+	GroundTileMaterial = LoadTerrainMaterial(TEXT("/Game/N3D/Materials/Examples/Instances/MI_N3D_Stylized_Grass.MI_N3D_Stylized_Grass"));
+	PathTileMaterial = LoadTerrainMaterial(TEXT("/Game/N3D/Materials/Examples/Instances/MI_N3D_Stylized_Ground.MI_N3D_Stylized_Ground"));
+
+	PrepareMaterialForInstancing(GroundTileMaterial.Get());
+	PrepareMaterialForInstancing(PathTileMaterial.Get());
+
+	if (GroundTileMaterial)
+	{
+		ApplyInstancerMaterial(GroundTileInstancer, GroundTileMaterial.Get(), GroundMaterialInstance);
+		ApplyInstancerMaterial(ElevatedTileInstancer, GroundTileMaterial.Get(), GroundMaterialInstance);
+		UE_LOG(LogTowerDefense, Log, TEXT("Applied stylized grass to ground tiles: %s"), *GetNameSafe(GroundTileMaterial.Get()));
+	}
+	else
+	{
+		SetInstancerColor(GroundTileInstancer, GroundMaterialInstance, GroundColor);
+		SetInstancerColor(ElevatedTileInstancer, GroundMaterialInstance, GroundColor);
+		UE_LOG(LogTowerDefense, Warning, TEXT("MI_N3D_Stylized_Grass failed to load. Ground tiles using fallback colour."));
+	}
+
+	if (PathTileMaterial)
+	{
+		ApplyInstancerMaterial(PathTileInstancer, PathTileMaterial.Get(), PathMaterialInstance);
+		UE_LOG(LogTowerDefense, Log, TEXT("Applied stylized ground to path tiles: %s"), *GetNameSafe(PathTileMaterial.Get()));
+	}
+	else
+	{
+		SetInstancerColor(PathTileInstancer, PathMaterialInstance, PathColor);
+		UE_LOG(LogTowerDefense, Warning, TEXT("MI_N3D_Stylized_Ground failed to load. Path tiles using fallback colour."));
+	}
+}
+
+UMaterialInterface* AProceduralTerrainGenerator::LoadTerrainMaterial(const TCHAR* Path) const
+{
+	UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, Path);
+	if (!Material)
+	{
+		UE_LOG(LogTowerDefense, Error, TEXT("Could not load terrain material '%s'."), Path);
+	}
+	return Material;
+}
+
+void AProceduralTerrainGenerator::PrepareMaterialForInstancing(UMaterialInterface* Material) const
+{
+	if (!Material)
+	{
+		return;
+	}
+
+	Material->CheckMaterialUsage(MATUSAGE_InstancedStaticMeshes);
+
+#if WITH_EDITOR
+	if (UMaterial* BaseMaterial = Material->GetMaterial())
+	{
+		BaseMaterial->SetMaterialUsage(MATUSAGE_InstancedStaticMeshes);
+		BaseMaterial->CheckMaterialUsage(MATUSAGE_InstancedStaticMeshes);
+	}
+#endif
+}
+
+void AProceduralTerrainGenerator::ApplyInstancerMaterial(UHierarchicalInstancedStaticMeshComponent* Instancer, UMaterialInterface* Material, TObjectPtr<UMaterialInstanceDynamic>& MaterialInstance)
+{
+	if (!Instancer || !Material)
+	{
+		return;
+	}
+
+	MaterialInstance = UMaterialInstanceDynamic::Create(Material, this);
+	UMaterialInterface* MaterialToApply = MaterialInstance ? MaterialInstance.Get() : Material;
+
+	const int32 SlotCount = FMath::Max(Instancer->GetNumMaterials(), 1);
+	for (int32 SlotIndex = 0; SlotIndex < SlotCount; ++SlotIndex)
+	{
+		Instancer->SetMaterial(SlotIndex, MaterialToApply);
+	}
+
+	Instancer->MarkRenderStateDirty();
 }
 
 UMaterialInterface* AProceduralTerrainGenerator::GetSourceTileMaterial() const

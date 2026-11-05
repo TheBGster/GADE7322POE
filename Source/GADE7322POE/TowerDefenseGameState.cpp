@@ -2,6 +2,8 @@
 
 #include "TowerDefenseGameState.h"
 #include "GADE7322POE.h"
+#include "GroveChronicleGenerator.h"
+#include "TowerDefenseUpgrade.h"
 
 ATowerDefenseGameState::ATowerDefenseGameState()
 {
@@ -16,6 +18,10 @@ ATowerDefenseGameState::ATowerDefenseGameState()
 	MatchState = ETowerDefenseMatchState::WaitingToStart;
 	CurrentWave = 0;
 	EnemiesDefeated = 0;
+	TowerUpgradeTier = 0;
+	ScoutUpgradeTier = 0;
+	CannonUpgradeTier = 0;
+	TrapUpgradeTier = 0;
 }
 
 void ATowerDefenseGameState::ResetForNewGame()
@@ -26,11 +32,18 @@ void ATowerDefenseGameState::ResetForNewGame()
 	MatchState = ETowerDefenseMatchState::WaitingToStart;
 	CurrentWave = 0;
 	EnemiesDefeated = 0;
+	TowerUpgradeTier = 0;
+	ScoutUpgradeTier = 0;
+	CannonUpgradeTier = 0;
+	TrapUpgradeTier = 0;
+	GroveChronicle = FGroveChronicle();
+	CurrentWaveFlavour = FText::GetEmpty();
 
 	OnResourcesChanged.Broadcast(CurrentResources);
 	OnTowerHealthChanged.Broadcast(TowerCurrentHealth, TowerMaxHealth);
-	OnMatchStateChanged.Broadcast(MatchState);
 	OnWaveChanged.Broadcast(CurrentWave, 0);
+	OnUpgradeChanged.Broadcast(EUpgradeTrack::Tower, 0);
+	OnChronicleChanged.Broadcast();
 
 	UE_LOG(LogTowerDefense, Log, TEXT("Game state reset. Starting resources: %d"), CurrentResources);
 }
@@ -129,8 +142,108 @@ int32 ATowerDefenseGameState::GetDefenderCostForKind(EDefenderKind Kind) const
 void ATowerDefenseGameState::SetCurrentWave(int32 NewWave, int32 EnemiesInWave)
 {
 	CurrentWave = FMath::Max(NewWave, 0);
+	CurrentWaveFlavour = GroveChronicleGenerator::GetWaveFlavour(GroveChronicle, CurrentWave, GetTotalUpgradePower());
 	OnWaveChanged.Broadcast(CurrentWave, EnemiesInWave);
+	OnChronicleChanged.Broadcast();
 	UE_LOG(LogTowerDefense, Log, TEXT("Wave %d started (%d enemies)."), CurrentWave, EnemiesInWave);
+}
+
+int32& ATowerDefenseGameState::GetUpgradeTierRef(EUpgradeTrack Track)
+{
+	switch (Track)
+	{
+	case EUpgradeTrack::JungleScout:
+		return ScoutUpgradeTier;
+	case EUpgradeTrack::BananaCannon:
+		return CannonUpgradeTier;
+	case EUpgradeTrack::VineTrap:
+		return TrapUpgradeTier;
+	default:
+		return TowerUpgradeTier;
+	}
+}
+
+int32 ATowerDefenseGameState::GetUpgradeTier(EUpgradeTrack Track) const
+{
+	switch (Track)
+	{
+	case EUpgradeTrack::JungleScout:
+		return ScoutUpgradeTier;
+	case EUpgradeTrack::BananaCannon:
+		return CannonUpgradeTier;
+	case EUpgradeTrack::VineTrap:
+		return TrapUpgradeTier;
+	default:
+		return TowerUpgradeTier;
+	}
+}
+
+int32 ATowerDefenseGameState::GetNextUpgradeCost(EUpgradeTrack Track) const
+{
+	const FUpgradeStep* Step = TowerDefenseUpgrade::GetStep(Track, GetUpgradeTier(Track) + 1);
+	return Step ? Step->Cost : 0;
+}
+
+FText ATowerDefenseGameState::GetNextUpgradeName(EUpgradeTrack Track) const
+{
+	const int32 CurrentTier = GetUpgradeTier(Track);
+	if (CurrentTier >= TowerDefenseUpgrade::GetMaxTier())
+	{
+		return NSLOCTEXT("TowerDefense", "UpgradeMaxed", "Maxed");
+	}
+
+	const FUpgradeStep* Step = TowerDefenseUpgrade::GetStep(Track, CurrentTier + 1);
+	return Step ? Step->Name : FText::GetEmpty();
+}
+
+bool ATowerDefenseGameState::CanBuyUpgrade(EUpgradeTrack Track) const
+{
+	if (MatchState != ETowerDefenseMatchState::InProgress)
+	{
+		return false;
+	}
+
+	if (GetUpgradeTier(Track) >= TowerDefenseUpgrade::GetMaxTier())
+	{
+		return false;
+	}
+
+	return CanAfford(GetNextUpgradeCost(Track));
+}
+
+bool ATowerDefenseGameState::TryBuyUpgrade(EUpgradeTrack Track)
+{
+	if (GetUpgradeTier(Track) >= TowerDefenseUpgrade::GetMaxTier())
+	{
+		return false;
+	}
+
+	const int32 Cost = GetNextUpgradeCost(Track);
+	if (!SpendResources(Cost))
+	{
+		return false;
+	}
+
+	int32& Tier = GetUpgradeTierRef(Track);
+	++Tier;
+	TowerDefenseUpgrade::ApplyTrackToWorld(GetWorld(), Track, Tier);
+	OnUpgradeChanged.Broadcast(Track, Tier);
+
+	UE_LOG(LogTowerDefense, Log, TEXT("Bought %s upgrade tier %d for %d."),
+		*TowerDefenseUpgrade::GetTrackDisplayName(Track).ToString(), Tier, Cost);
+	return true;
+}
+
+int32 ATowerDefenseGameState::GetTotalUpgradePower() const
+{
+	return TowerUpgradeTier + ScoutUpgradeTier + CannonUpgradeTier + TrapUpgradeTier;
+}
+
+void ATowerDefenseGameState::SetGroveChronicle(const FGroveChronicle& InChronicle)
+{
+	GroveChronicle = InChronicle;
+	CurrentWaveFlavour = GroveChronicle.OpeningBrief;
+	OnChronicleChanged.Broadcast();
 }
 
 void ATowerDefenseGameState::SetTowerHealth(float NewCurrentHealth, float NewMaxHealth)

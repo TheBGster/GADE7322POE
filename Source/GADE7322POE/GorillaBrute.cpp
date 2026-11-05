@@ -5,6 +5,7 @@
 #include "HealthComponent.h"
 #include "TowerDefenseGameState.h"
 #include "Components/WidgetComponent.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
@@ -23,23 +24,24 @@ AGorillaBrute::AGorillaBrute()
 	DefenderSmashMultiplier = 1.35f;
 	Tags.AddUnique(TowerDefenseTags::GorillaBrute);
 
-	if (MeshComponent)
-	{
-		static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere"));
-		if (SphereMesh.Succeeded())
-		{
-			MeshComponent->SetStaticMesh(SphereMesh.Object);
-		}
+	CharacterMeshTargetHeight = 160.0f;
 
-		MeshComponent->SetRelativeScale3D(FVector(1.35f, 1.35f, 1.25f));
-		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> GorillaMesh(TEXT("/Game/Fab/Realistic_Black_Gorilla_Free_Low_Poly/gfree/StaticMeshes/gfree.gfree"));
+	if (GorillaMesh.Succeeded())
+	{
+		CharacterMesh = GorillaMesh.Object;
+		SetupCharacterMesh();
 	}
 
 	if (HealthBarComponent)
 	{
-		HealthBarComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 160.0f));
 		HealthBarComponent->SetDrawSize(FVector2D(140.0f, 30.0f));
 	}
+}
+
+const TCHAR* AGorillaBrute::GetCharacterMeshPath() const
+{
+	return TEXT("/Game/Fab/Realistic_Black_Gorilla_Free_Low_Poly/gfree/StaticMeshes/gfree.gfree");
 }
 
 void AGorillaBrute::AttackTarget()
