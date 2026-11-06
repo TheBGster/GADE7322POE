@@ -5,6 +5,7 @@
 #include "GADE7322POE.h"
 #include "EnemyBase.h"
 #include "HealthComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Math/NumericLimits.h"
 #include "TimerManager.h"
 #include "TowerDefenseUpgrade.h"
@@ -24,8 +25,21 @@ ABananaCannon::ABananaCannon()
 	ProjectileClass = ABananaProjectile::StaticClass();
 	Tags.AddUnique(TowerDefenseTags::BananaCannon);
 
+	MeshTargetHeight = 180.0f;
+	MeshMaxXY = 160.0f;
 	RestingMeshScale = FVector(1.15f, 1.15f, 1.8f);
-	if (MeshComponent)
+
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CannonMesh(TEXT("/Game/Meshes/SM_BananaCannon.SM_BananaCannon"));
+	if (CannonMesh.Succeeded())
+	{
+		CharacterMesh = CannonMesh.Object;
+		SetupCharacterMesh();
+		if (MeshComponent)
+		{
+			RestingMeshScale = MeshComponent->GetRelativeScale3D();
+		}
+	}
+	else if (MeshComponent)
 	{
 		static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(TEXT("/Engine/BasicShapes/Cone"));
 		if (ConeMesh.Succeeded())
@@ -36,6 +50,11 @@ ABananaCannon::ABananaCannon()
 		MeshComponent->SetRelativeScale3D(RestingMeshScale);
 		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 90.0f));
 	}
+}
+
+const TCHAR* ABananaCannon::GetCharacterMeshPath() const
+{
+	return TEXT("/Game/Meshes/SM_BananaCannon.SM_BananaCannon");
 }
 
 void ABananaCannon::FindTarget()
@@ -94,7 +113,14 @@ void ABananaCannon::AttackTarget()
 	}
 
 	UClass* ClassToSpawn = ProjectileClass ? ProjectileClass.Get() : ABananaProjectile::StaticClass();
-	const FVector SpawnLocation = GetActorLocation() + FVector(0.0f, 0.0f, 80.0f);
+	float MuzzleZ = 80.0f;
+	if (MeshComponent && MeshComponent->GetStaticMesh())
+	{
+		const FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+		const float Scale = MeshComponent->GetRelativeScale3D().Z;
+		MuzzleZ = MeshComponent->GetRelativeLocation().Z + (Bounds.Origin.Z + Bounds.BoxExtent.Z * 0.35f) * Scale;
+	}
+	const FVector SpawnLocation = GetActorLocation() + FVector(0.0f, 0.0f, MuzzleZ);
 	ABananaProjectile* Projectile = GetWorld()->SpawnActor<ABananaProjectile>(ClassToSpawn, SpawnLocation, FRotator::ZeroRotator);
 	if (IsValid(Projectile))
 	{
@@ -117,6 +143,16 @@ void ABananaCannon::AttackTarget()
 
 void ABananaCannon::ResetFireVisual()
 {
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+		if (MeshComponent)
+		{
+			RestingMeshScale = MeshComponent->GetRelativeScale3D();
+		}
+		return;
+	}
+
 	if (MeshComponent)
 	{
 		MeshComponent->SetRelativeScale3D(RestingMeshScale);
@@ -132,9 +168,8 @@ void ABananaCannon::ApplyKindSpecificUpgrade(int32 TierIndex)
 	}
 
 	ProjectileSpeed += Step->BonusProjectileSpeed;
-	RestingMeshScale = BaseMeshScale;
 	if (MeshComponent)
 	{
-		MeshComponent->SetRelativeScale3D(RestingMeshScale);
+		RestingMeshScale = MeshComponent->GetRelativeScale3D();
 	}
 }

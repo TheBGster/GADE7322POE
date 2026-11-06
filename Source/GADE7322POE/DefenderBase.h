@@ -14,6 +14,7 @@ class USceneComponent;
 class UWidgetComponent;
 class UMaterialInstanceDynamic;
 class ADefenderPlacementPoint;
+class UStaticMesh;
 
 
 UCLASS()
@@ -96,6 +97,9 @@ protected:
 	void RestoreBodyColor();
 	void RefreshUpgradeVisuals();
 	void EnsureCollarMesh();
+	void EnsureCharacterMeshLoaded();
+	void SetupCharacterMesh();
+	virtual const TCHAR* GetCharacterMeshPath() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Defender")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -126,6 +130,21 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual")
 	FLinearColor BodyColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual")
+	TObjectPtr<UStaticMesh> CharacterMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual", meta = (ClampMin = "10.0"))
+	float MeshTargetHeight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual", meta = (ClampMin = "0.0"))
+	float MeshMaxXY;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual")
+	float MeshYawOffset;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Visual", meta = (ClampMin = "0.1"))
+	float MeshScaleMultiplier;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Health", meta = (ClampMin = "1.0"))
 	float MaxHealth;

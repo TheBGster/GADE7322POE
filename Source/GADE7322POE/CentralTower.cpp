@@ -7,9 +7,11 @@
 #include "TowerDefenseGameMode.h"
 #include "TowerDefenseGameState.h"
 #include "TowerDefenseTypes.h"
+#include "TowerDefenseMeshFit.h"
 #include "TowerDefenseUpgrade.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
@@ -25,6 +27,10 @@ ACentralTower::ACentralTower()
 	AppliedUpgradeTier = 0;
 	VisualSwayAmount = 0.0f;
 	BaseMeshScale = FVector(1.6f, 1.6f, 2.8f);
+	MeshTargetHeight = 450.0f;
+	MeshMaxXY = 380.0f;
+	MeshYawOffset = 0.0f;
+	MeshScaleMultiplier = 1.0f;
 
 	MaxHealth = 100.0f;
 	AttackRange = 800.0f;
@@ -44,8 +50,19 @@ ACentralTower::ACentralTower()
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
 	MeshComponent->SetGenerateOverlapEvents(true);
 
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> TreeMesh(TEXT("/Game/Meshes/SM_MainTree.SM_MainTree"));
+	if (TreeMesh.Succeeded())
+	{
+		CharacterMesh = TreeMesh.Object;
+	}
+
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder"));
-	if (CylinderMesh.Succeeded())
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+		BaseMeshScale = MeshComponent->GetRelativeScale3D();
+	}
+	else if (CylinderMesh.Succeeded())
 	{
 		MeshComponent->SetStaticMesh(CylinderMesh.Object);
 	}
@@ -56,8 +73,11 @@ ACentralTower::ACentralTower()
 		BaseTowerMaterial = ShapeMaterial.Object;
 	}
 
-	MeshComponent->SetRelativeScale3D(BaseMeshScale);
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+	if (!CharacterMesh)
+	{
+		MeshComponent->SetRelativeScale3D(BaseMeshScale);
+		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+	}
 
 	CanopyRingMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CanopyRingMesh"));
 	CanopyRingMesh->SetupAttachment(SceneRoot);
@@ -103,6 +123,12 @@ void ACentralTower::BeginPlay()
 		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
 		HealthComponent->OnHealthChanged.AddUniqueDynamic(this, &ThisClass::HandleHealthChanged);
 		SyncHealthToGameState();
+	}
+
+	EnsureCharacterMeshLoaded();
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
 	}
 
 	if (MeshComponent)
@@ -343,6 +369,21 @@ void ACentralTower::ApplyTowerMaterial()
 		return;
 	}
 
+	if (CharacterMesh)
+	{
+		UMaterialInterface* Source = MeshComponent->GetMaterial(0);
+		if (!Source)
+		{
+			Source = CharacterMesh->GetMaterial(0);
+		}
+		if (Source)
+		{
+			TowerMaterialInstance = UMaterialInstanceDynamic::Create(Source, this);
+			MeshComponent->SetMaterial(0, TowerMaterialInstance);
+		}
+		return;
+	}
+
 	TowerMaterialInstance = JungleVisuals::ApplyBodyMaterial(
 		MeshComponent,
 		this,
@@ -379,11 +420,23 @@ void ACentralTower::ApplyUpgradeStep(int32 TierIndex)
 	AttackDamage += Step->BonusDamage;
 	AttackCooldown = FMath::Max(AttackCooldown * Step->CooldownMultiplier, 0.1f);
 	TowerColor = Step->Color;
-	BaseMeshScale *= Step->ScaleMultiplier;
-	if (MeshComponent)
+	MeshScaleMultiplier *= Step->ScaleMultiplier;
+	if (CharacterMesh)
 	{
-		MeshComponent->SetRelativeScale3D(BaseMeshScale);
-		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+		SetupCharacterMesh();
+		if (MeshComponent)
+		{
+			BaseMeshScale = MeshComponent->GetRelativeScale3D();
+		}
+	}
+	else
+	{
+		BaseMeshScale *= Step->ScaleMultiplier;
+		if (MeshComponent)
+		{
+			MeshComponent->SetRelativeScale3D(BaseMeshScale);
+			MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+		}
 	}
 
 	if (TierIndex >= 1)
@@ -427,8 +480,55 @@ void ACentralTower::EnsureCanopyRing()
 
 void ACentralTower::RefreshUpgradeVisuals()
 {
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+		if (MeshComponent)
+		{
+			BaseMeshScale = MeshComponent->GetRelativeScale3D();
+		}
+		return;
+	}
+
 	if (MeshComponent)
 	{
 		MeshComponent->SetRelativeScale3D(BaseMeshScale);
 	}
+}
+
+const TCHAR* ACentralTower::GetCharacterMeshPath() const
+{
+	return TEXT("/Game/Meshes/SM_MainTree.SM_MainTree");
+}
+
+void ACentralTower::EnsureCharacterMeshLoaded()
+{
+	if (CharacterMesh)
+	{
+		return;
+	}
+
+	CharacterMesh = TowerDefenseMeshFit::LoadMesh(GetCharacterMeshPath());
+}
+
+void ACentralTower::SetupCharacterMesh()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	EnsureCharacterMeshLoaded();
+	if (!CharacterMesh)
+	{
+		return;
+	}
+
+	const float Scale = TowerDefenseMeshFit::Apply(
+		MeshComponent,
+		CharacterMesh,
+		MeshTargetHeight * MeshScaleMultiplier,
+		MeshMaxXY * MeshScaleMultiplier,
+		MeshYawOffset);
+	BaseMeshScale = FVector(Scale);
 }

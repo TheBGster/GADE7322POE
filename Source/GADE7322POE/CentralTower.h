@@ -12,6 +12,7 @@ class UMaterialInterface;
 class USphereComponent;
 class UStaticMeshComponent;
 class USceneComponent;
+class UStaticMesh;
 
 
 UCLASS()
@@ -68,6 +69,9 @@ protected:
 	void ApplyTowerMaterial();
 	void RefreshUpgradeVisuals();
 	void EnsureCanopyRing();
+	void EnsureCharacterMeshLoaded();
+	void SetupCharacterMesh();
+	const TCHAR* GetCharacterMeshPath() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tower")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -105,6 +109,21 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Materials")
 	FLinearColor TowerColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Visual")
+	TObjectPtr<UStaticMesh> CharacterMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Visual", meta = (ClampMin = "10.0"))
+	float MeshTargetHeight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Visual", meta = (ClampMin = "0.0"))
+	float MeshMaxXY;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Visual")
+	float MeshYawOffset;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tower|Visual", meta = (ClampMin = "0.1"))
+	float MeshScaleMultiplier;
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Tower|Materials")
 	TObjectPtr<UMaterialInstanceDynamic> TowerMaterialInstance;

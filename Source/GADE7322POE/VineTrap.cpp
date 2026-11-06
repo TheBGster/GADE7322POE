@@ -11,7 +11,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "TimerManager.h"
+#include "TowerDefenseMeshFit.h"
 #include "TowerDefenseUpgrade.h"
+#include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVineTrap::AVineTrap()
@@ -29,7 +31,16 @@ AVineTrap::AVineTrap()
 	PulseDamage = 3.0f;
 	Tags.AddUnique(TowerDefenseTags::VineTrap);
 
-	if (MeshComponent)
+	MeshTargetHeight = 200.0f;
+	MeshMaxXY = 200.0f;
+
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> TrapMesh(TEXT("/Game/Meshes/SM_VineTrap.SM_VineTrap"));
+	if (TrapMesh.Succeeded())
+	{
+		CharacterMesh = TrapMesh.Object;
+		SetupCharacterMesh();
+	}
+	else if (MeshComponent)
 	{
 		MeshComponent->SetRelativeScale3D(FVector(1.8f, 1.8f, 0.28f));
 		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 18.0f));
@@ -49,10 +60,21 @@ AVineTrap::AVineTrap()
 		VineRingMesh->SetStaticMesh(CylinderMesh.Object);
 	}
 
-	if (HealthBarComponent)
+	if (CharacterMesh && VineRingMesh)
+	{
+		VineRingMesh->SetHiddenInGame(true);
+		VineRingMesh->SetVisibility(false);
+	}
+
+	if (HealthBarComponent && !CharacterMesh)
 	{
 		HealthBarComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
 	}
+}
+
+const TCHAR* AVineTrap::GetCharacterMeshPath() const
+{
+	return TEXT("/Game/Meshes/SM_VineTrap.SM_VineTrap");
 }
 
 void AVineTrap::BeginPlay()
@@ -123,7 +145,16 @@ void AVineTrap::PulseVines()
 		}
 	}
 
-	if (VineRingMesh)
+	if (MeshComponent && CharacterMesh)
+	{
+		MeshComponent->SetRelativeScale3D(BaseMeshScale * 1.18f);
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(PulseVisualTimerHandle);
+			World->GetTimerManager().SetTimer(PulseVisualTimerHandle, this, &ThisClass::ResetPulseVisual, 0.18f, false);
+		}
+	}
+	else if (VineRingMesh)
 	{
 		VineRingMesh->SetRelativeScale3D(RestingRingScale * FVector(1.29f, 1.29f, 1.25f));
 		if (UWorld* World = GetWorld())
@@ -138,6 +169,12 @@ void AVineTrap::PulseVines()
 
 void AVineTrap::ResetPulseVisual()
 {
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+		return;
+	}
+
 	if (VineRingMesh)
 	{
 		VineRingMesh->SetRelativeScale3D(RestingRingScale);

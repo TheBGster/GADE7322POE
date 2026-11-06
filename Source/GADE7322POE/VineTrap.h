@@ -26,6 +26,7 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void AttackTarget() override;
 	virtual void ApplyKindSpecificUpgrade(int32 TierIndex) override;
+	virtual const TCHAR* GetCharacterMeshPath() const override;
 	void ApplyVineMaterials();
 
 	void PulseVines();

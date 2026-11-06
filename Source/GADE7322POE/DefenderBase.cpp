@@ -7,10 +7,12 @@
 #include "HealthComponent.h"
 #include "JungleVisuals.h"
 #include "TowerDefenseGameState.h"
+#include "TowerDefenseMeshFit.h"
 #include "TowerDefenseTypes.h"
 #include "TowerDefenseUpgrade.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Components/WidgetComponent.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
@@ -26,6 +28,10 @@ ADefenderBase::ADefenderBase()
 	AppliedUpgradeTier = 0;
 	VisualSwayAmount = 0.0f;
 	BaseMeshScale = FVector(1.0f, 1.0f, 1.5f);
+	MeshTargetHeight = 150.0f;
+	MeshMaxXY = 140.0f;
+	MeshYawOffset = 0.0f;
+	MeshScaleMultiplier = 1.0f;
 
 	MaxHealth = 80.0f;
 	AttackRange = 700.0f;
@@ -48,14 +54,24 @@ ADefenderBase::ADefenderBase()
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
 	MeshComponent->SetGenerateOverlapEvents(true);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder"));
-	if (CylinderMesh.Succeeded())
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ScoutMesh(TEXT("/Game/Meshes/SM_JungleScout.SM_JungleScout"));
+	if (ScoutMesh.Succeeded())
 	{
-		MeshComponent->SetStaticMesh(CylinderMesh.Object);
+		CharacterMesh = ScoutMesh.Object;
 	}
 
-	MeshComponent->SetRelativeScale3D(BaseMeshScale);
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder"));
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+		BaseMeshScale = MeshComponent->GetRelativeScale3D();
+	}
+	else if (CylinderMesh.Succeeded())
+	{
+		MeshComponent->SetStaticMesh(CylinderMesh.Object);
+		MeshComponent->SetRelativeScale3D(BaseMeshScale);
+		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+	}
 
 	CollarMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CollarMesh"));
 	CollarMesh->SetupAttachment(SceneRoot);
@@ -108,6 +124,12 @@ void ADefenderBase::BeginPlay()
 		HealthComponent->InitializeHealth(MaxHealth);
 		HealthComponent->OnDeath.AddUniqueDynamic(this, &ThisClass::Die);
 		HealthComponent->OnDamaged.AddUniqueDynamic(this, &ThisClass::HandleDamaged);
+	}
+
+	EnsureCharacterMeshLoaded();
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
 	}
 
 	if (MeshComponent)
@@ -345,6 +367,11 @@ void ADefenderBase::PlayDamageFlash()
 
 void ADefenderBase::RestoreBodyColor()
 {
+	if (CharacterMesh)
+	{
+		return;
+	}
+
 	JungleVisuals::UpdateDynamicMaterial(
 		BodyMaterialInstance,
 		BodyColor,
@@ -357,6 +384,21 @@ void ADefenderBase::ApplyBodyColor()
 {
 	if (!MeshComponent)
 	{
+		return;
+	}
+
+	if (CharacterMesh)
+	{
+		UMaterialInterface* Source = MeshComponent->GetMaterial(0);
+		if (!Source)
+		{
+			Source = CharacterMesh->GetMaterial(0);
+		}
+		if (Source)
+		{
+			BodyMaterialInstance = UMaterialInstanceDynamic::Create(Source, this);
+			MeshComponent->SetMaterial(0, BodyMaterialInstance);
+		}
 		return;
 	}
 
@@ -396,11 +438,23 @@ void ADefenderBase::ApplyUpgradeStep(int32 TierIndex)
 	}
 
 	BodyColor = Step->Color;
-	BaseMeshScale *= Step->ScaleMultiplier;
-	if (MeshComponent)
+	MeshScaleMultiplier *= Step->ScaleMultiplier;
+	if (CharacterMesh)
 	{
-		MeshComponent->SetRelativeScale3D(BaseMeshScale);
-		MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+		SetupCharacterMesh();
+		if (MeshComponent)
+		{
+			BaseMeshScale = MeshComponent->GetRelativeScale3D();
+		}
+	}
+	else
+	{
+		BaseMeshScale *= Step->ScaleMultiplier;
+		if (MeshComponent)
+		{
+			MeshComponent->SetRelativeScale3D(BaseMeshScale);
+			MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f * BaseMeshScale.Z));
+		}
 	}
 
 	AppliedUpgradeTier = TierIndex;
@@ -442,10 +496,58 @@ void ADefenderBase::EnsureCollarMesh()
 
 void ADefenderBase::RefreshUpgradeVisuals()
 {
+	if (CharacterMesh)
+	{
+		SetupCharacterMesh();
+		if (MeshComponent)
+		{
+			BaseMeshScale = MeshComponent->GetRelativeScale3D();
+		}
+		return;
+	}
+
 	if (MeshComponent)
 	{
 		MeshComponent->SetRelativeScale3D(BaseMeshScale);
 	}
+}
+
+const TCHAR* ADefenderBase::GetCharacterMeshPath() const
+{
+	return TEXT("/Game/Meshes/SM_JungleScout.SM_JungleScout");
+}
+
+void ADefenderBase::EnsureCharacterMeshLoaded()
+{
+	if (CharacterMesh)
+	{
+		return;
+	}
+
+	CharacterMesh = TowerDefenseMeshFit::LoadMesh(GetCharacterMeshPath());
+}
+
+void ADefenderBase::SetupCharacterMesh()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	EnsureCharacterMeshLoaded();
+	if (!CharacterMesh)
+	{
+		return;
+	}
+
+	const float Scale = TowerDefenseMeshFit::Apply(
+		MeshComponent,
+		CharacterMesh,
+		MeshTargetHeight * MeshScaleMultiplier,
+		MeshMaxXY * MeshScaleMultiplier,
+		MeshYawOffset,
+		HealthBarComponent);
+	BaseMeshScale = FVector(Scale);
 }
 
 void ADefenderBase::SetupHealthBar()

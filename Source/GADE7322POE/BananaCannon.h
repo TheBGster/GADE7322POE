@@ -23,6 +23,7 @@ protected:
 	virtual void FindTarget() override;
 	virtual void AttackTarget() override;
 	virtual void ApplyKindSpecificUpgrade(int32 TierIndex) override;
+	virtual const TCHAR* GetCharacterMeshPath() const override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Defender|Combat")
 	TSubclassOf<ABananaProjectile> ProjectileClass;
